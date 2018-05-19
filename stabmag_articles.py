@@ -23,7 +23,7 @@ def get_logger():
     global _logger
     if _logger is None:
         logfile = Path(os.path.dirname(os.path.realpath(__file__))) / "log/stabmag_articles.log"
-        _logger = doglog.setup_logger("stabmag_article", logfile, clevel=logging.WARNING)
+        _logger = doglog.setup_logger("stabmag_article", logfile, clevel=logging.INFO)
     return _logger
 
 
@@ -68,7 +68,7 @@ def scrape_article(slug):
     # Load the article and wait for it to load
     url = ARTICLE_TEMPLATE.format(slug)
 
-    if not get_driver().get(url):
+    if not get_driver().get_url(url):
         # We'll just have to skip this slug, can't load it even with retries
         return
 
@@ -135,12 +135,12 @@ def scrape_articles():
     get_logger().info("{} slugs haven't been crawled yet: \n{}".format(len(slugs), slugs))
 
     for slug in slugs:
-        get_logger().debug("Scraping slug: {}".format(slug))
+        get_logger().info("Scraping slug: {}".format(slug))
         scrape_article(slug)
 
 
 def cleanup():
-    get_driver().quit()
+    get_driver().driver.quit()
 
 
 if __name__ == "__main__":

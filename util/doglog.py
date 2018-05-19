@@ -2,12 +2,13 @@ import os
 import logging
 
 
-def setup_logger(name, log_file, flevel=logging.INFO, clevel=logging.INFO):
+def setup_logger(name, log_file, flevel=logging.WARNING, clevel=logging.WARNING):
     """ Setup a logger for a specific scraper
 
     :param name: Name of the logger
     :param log_file: The log file to output to
-    :param level: A specific logging level to use (defaults to WARNING)
+    :param flevel: A specific logging level to use (defaults to WARNING)
+    :param clevel: A specific logging level to use (defaults to WARNING)
     :return: the configured logger
     """
     # If the directory of the given filepath doesn't exist, go ahead and create it...

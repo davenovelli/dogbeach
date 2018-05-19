@@ -117,25 +117,25 @@ def scrape():
     """
     get_logger().info("Starting scrape of 15 pages of latest Stab Mag news...")
     # Load the news page and wait for the posts to load
-    get_driver().get(NEWS_URL)
+    get_driver().get_url(NEWS_URL)
     time.sleep(5)
 
     # Click the "load more" button so we have all of the first 20 results (only for first page)
-    more_button = get_driver().find_element_by_class_name('pagination-load-more')
+    more_button = get_driver().driver.find_element_by_class_name('pagination-load-more')
     more_button.click()
     time.sleep(5)
     get_logger().debug("Got the news page")
 
     i = 0
     while i < 15:
-        posts = get_driver().find_element_by_id('blog-list')
+        posts = get_driver().driver.find_element_by_id('blog-list')
         extract_articles(posts)
         try:
-            next_button = get_driver().find_element(By.XPATH, '//a[text()="Next Page"]')
+            next_button = get_driver().driver.find_element(By.XPATH, '//a[text()="Next Page"]')
         except:
-            get_driver().get_screenshot_as_file("error_{}.png".format(time.time()))
+            get_driver().driver.get_screenshot_as_file("error_{}.png".format(time.time()))
             get_logger().error('Failed to find "Next Page" link', exc_info=True)
-            get_logger().info('page source...\n{}'.format(get_driver().page_source))
+            get_logger().info('page source...\n{}'.format(get_driver().driver.page_source))
             exit()
 
         next_button.click()
@@ -145,7 +145,7 @@ def scrape():
 
 
 def cleanup():
-    get_driver().quit()
+    get_driver().driver.quit()
 
 
 if __name__ == "__main__":

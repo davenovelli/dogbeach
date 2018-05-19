@@ -45,7 +45,7 @@ class DogDriver:
         else:
             return webdriver.Chrome(chrome_options=options, executable_path=currdir.format("chromedriver"))
 
-    def get_url(self, url, sleep, tries):
+    def get_url(self, url, sleep=None, tries=None):
         """ Recursive method to retrieve the
 
         :param url: The URL to load
@@ -77,13 +77,6 @@ class DogDriver:
         newsleep = s + max(int(self.backoff * s), 1)
 
         return self.get_url(url, newsleep, tries - 1)
-
-    def driver(self):
-        """ returns the driver object
-
-        :return:
-        """
-        return self.driver
 
 
 if __name__ == "__main__":
