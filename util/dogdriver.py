@@ -57,8 +57,8 @@ class DogDriver:
 
         # Attempt to load the page, catch and log any exceptions
         try:
-            time.sleep(s)
             self.driver.get(url)
+            time.sleep(s)
             return True
         except WebDriverException:
             if self.logger is not None:
