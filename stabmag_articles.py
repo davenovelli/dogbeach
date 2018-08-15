@@ -54,7 +54,7 @@ def save_article_to_json(tup):
         'content': tup[5]
     }
 
-    with open("data/article_json/{}.json".format(tup[0]), 'w') as f:
+    with open("data/article_json/stabmag/{}.json".format(tup[0]), 'w') as f:
         json.dump(article, f)
 
 
@@ -125,7 +125,7 @@ def scrape_articles():
 
     # Then read in the list of article slugs that have been scraped already
     slugs = []
-    for filename in os.listdir("data/article_json"):
+    for filename in os.listdir("data/article_json/stabmag"):
         slug = filename.split('.')[0]
         slugs += [slug]
     get_logger().debug("{} articles have been scraped: \n{}".format(len(slugs), "\n".join(slugs)))
