@@ -54,6 +54,7 @@ class DogDriver:
         :return: True if successful, False otherwise
         """
         s = self.sleep if sleep is None else sleep
+        s = self.tries if tries is None else tries
 
         # Attempt to load the page, catch and log any exceptions
         try:
