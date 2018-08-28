@@ -40,20 +40,6 @@ def get_driver():
     return _driver
 
 
-def fix_unicode(source):
-    """
-
-    :return:
-    """
-    return source\
-        .replace('\u201c', '"')\
-        .replace('\u201d', '"')\
-        .replace('\u2019', "'")\
-        .replace('\u00a0', " ")\
-        .replace('\u2013', '-')\
-        .replace('\u2014', '-')
-
-
 def save_article_to_json(tup):
     """ Take a tuple containing all the useful attributes from an article and save it to it's own json file
 
@@ -171,15 +157,16 @@ def scrape_article(slug):
     :param url:
     :return:
     """
+    d = get_driver()
     # Load the article and wait for it to load
     url = ARTICLE_TEMPLATE.format(slug)
     get_logger().debug("Processing URL: {}".format(url))
 
-    if not get_driver().get_url(url):
+    if not d.get_url(url):
         # We'll just have to skip this slug, can't load it even with retries
         return
 
-    source = fix_unicode(get_driver().driver.page_source)
+    source = d.clean_unicode(d.driver.page_source)
     if 'ERROR 404' in source:
         get_logger().debug("Skipping (url is a 404) - {}".format(url))
         return

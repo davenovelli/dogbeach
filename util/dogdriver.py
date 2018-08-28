@@ -54,7 +54,7 @@ class DogDriver:
         :return: True if successful, False otherwise
         """
         s = self.sleep if sleep is None else sleep
-        s = self.tries if tries is None else tries
+        t = self.tries if tries is None else tries
 
         # Attempt to load the page, catch and log any exceptions
         try:
@@ -69,7 +69,7 @@ class DogDriver:
                 self.logger.error("TimeoutException on: {}".format(url), exc_info=True)
 
         # If this is the last attempt, log an error and return False
-        if tries == 1:
+        if t == 1:
             if self.logger is not None:
                 self.logger.error("Failed to retrieve the page before running out of retries")
             return False
@@ -77,7 +77,23 @@ class DogDriver:
         # Calculate the new duration to sleep, backoff AT LEAST 1 second
         newsleep = s + max(int(self.backoff * s), 1)
 
-        return self.get_url(url, newsleep, tries - 1)
+        return self.get_url(url, newsleep, t - 1)
+
+    @staticmethod
+    def clean_unicode(source):
+        """Clean unhelpful unicode characters out of scraped page content before saving
+
+        :param content: Page source from a scraped url
+        :return: cleaned up source
+        """
+        return source \
+            .replace('\u201c', '"') \
+            .replace('\u201d', '"') \
+            .replace('\u2019', "'") \
+            .replace('\u00a0', " ") \
+            .replace('\u2013', '-') \
+            .replace('\u2014', '-')
+
 
 
 if __name__ == "__main__":

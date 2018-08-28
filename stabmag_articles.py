@@ -65,14 +65,16 @@ def scrape_article(slug):
     :param url:
     :return:
     """
+    d = get_driver()
+
     # Load the article and wait for it to load
     url = ARTICLE_TEMPLATE.format(slug)
 
-    if not get_driver().get_url(url):
+    if not d.get_url(url):
         # We'll just have to skip this slug, can't load it even with retries
         return
 
-    source = get_driver().driver.page_source.replace('\u201c', '"').replace('\u201d', '"').replace('\u2019', "'")
+    source = d.clean_unicode(d.driver.page_source)
     soup = BeautifulSoup(source, "html.parser")
     article_soup = soup.find("article", class_="container")
 
