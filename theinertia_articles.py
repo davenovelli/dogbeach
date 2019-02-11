@@ -180,7 +180,10 @@ def scrape_article(slug):
         return()
 
     # Category
-    category = article_soup.find("small", {"itemprop": "articleSection"}).get_text().strip()
+    category_soup = article_soup.find("small", {"itemprop": "articleSection"})
+    if category_soup is None:
+        category_soup = article_soup.find("span", class_='inertia-category-tag')
+    category = category_soup.get_text().strip()
     print("category: {}".format(category))
 
     # Title

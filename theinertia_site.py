@@ -88,12 +88,18 @@ def extract_articles(post_source):
     ts = time.time()
 
     soup = BeautifulSoup(post_source, "html.parser")
-    articles = soup.find_all("div", class_="item")
+    articles = soup.find_all("div", class_="inertia-item")
+    if len(articles) == 0:
+        # Perhaps we're dealing with old html, the class switched in Nov 2018
+        articles = soup.find_all("div", class_="item")
+        if len(articles) == 0:
+            get_logger().warn("No articles found to extract")
+            return
 
-    get_logger().info("Extracting {} articles starting with: {}".format(len(articles), articles[0].find('a', class_='inertia-content-sq').get('href')))
+    get_logger().info("Extracting {} articles starting with: {}".format(len(articles), articles[0].find('a').get('href')))
     for article in articles:
         # print(article.prettify())
-        url = article.find('a', class_='inertia-content-sq').get('href').replace('https://www.theinertia.com/', '')[:-1]
+        url = article.find('a').get('href').replace('https://www.theinertia.com/', '')[:-1]
         if url in _already_scraped:
             continue
         img = article.find('img').get('src')
