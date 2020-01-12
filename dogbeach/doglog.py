@@ -12,7 +12,8 @@ def setup_logger(name, log_file, flevel=logging.WARNING, clevel=logging.WARNING)
     :return: the configured logger
     """
     # If the directory of the given filepath doesn't exist, go ahead and create it...
-    os.makedirs(os.path.dirname(log_file), exist_ok=True)
+    if not os.path.exists(log_file):
+        os.makedirs(os.path.dirname(log_file), exist_ok=True)
 
     # Create the formatter
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')

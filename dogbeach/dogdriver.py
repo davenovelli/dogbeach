@@ -1,6 +1,6 @@
 import os
 import time
-from util import doglog
+from dogbeach import doglog
 from sys import platform
 from pathlib import Path
 from selenium import webdriver
@@ -89,11 +89,11 @@ class DogDriver:
         return source \
             .replace('\u201c', '"') \
             .replace('\u201d', '"') \
+            .replace('\u2018', "'") \
             .replace('\u2019', "'") \
             .replace('\u00a0', " ") \
             .replace('\u2013', '-') \
             .replace('\u2014', '-')
-
 
 
 if __name__ == "__main__":
