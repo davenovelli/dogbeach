@@ -4,13 +4,22 @@ import json
 import time
 import atexit
 import logging
+import numpy as np
+import pandas as pd
+
+from pathlib import Path
+from bs4 import BeautifulSoup
+from datetime import datetime
+from selenium.webdriver.common.by import By
+from sqlalchemy import create_engine
 
 from dogbeach import doglog
 from dogbeach.dogdriver import DogDriver
 
-from pathlib import Path
-from bs4 import BeautifulSoup 
-from selenium.webdriver.common.by import By
+
+pd.set_option('display.max_columns', None)
+pd.set_option('display.max_colwidth', 50)
+pd.set_option('display.width', 500)
 
 
 SITE = "https://stabmag.com"
@@ -19,9 +28,11 @@ NEWS_URL = "https://stabmag.com/news/"
 DEFAULT_SLEEP_SECS = 10
 
 _logger = None
+_engine = None
 _drivers = {}
 
 ALREADY_SCRAPED = set()
+PAGES_TO_SCRAPE = 1
 
 
 def get_logger():
@@ -47,55 +58,68 @@ def get_driver(name='default'):
     return _drivers[name]
 
 
-def get_json_filename():
+def get_rds_engine():
+    """ Get the sqlalchemy engine object to read from RDS
+
+    :return: SqlAlchemy engine object
     """
+    try:
+        user = os.environ['YEWREVIEW_RDS_USER']
+        pw = os.environ['YEWREVIEW_RDS_PASS']
+        host = os.environ['YEWREVIEW_RDS_HOST']
+        port = os.environ['YEWREVIEW_RDS_PORT']
+    except:
+        get_logger().debug("Required database connection environment variable missing")
+        raise
 
-    :return:
-    """
-    return "{}/data/stabmag_articles.json".format(os.path.dirname(os.path.realpath(__file__)))
+    global _engine
+    if _engine is None:
+        _engine = create_engine('mysql+pymysql://{}:{}@{}:{}/yewreview'.format(user, pw, host, port), encoding='utf8')
+
+    return _engine
 
 
-def get_articles_file():
-    """ If the file exists, just return the file handle. If it doesn't, create the file and add the header
-
-    :return: the file handle to the the models csv file
-    """
-    if os.path.isfile(get_json_filename()):
-        return open(get_json_filename(), 'a+')
-
-    return open(get_json_filename(), 'w+')
-
-
-def write_articles_to_file(articles):
+def write_articles_to_rds(articles):
     """
 
     :param articles:
     :return:
     """
-    f = get_articles_file()
+    cols = ['uri', 'publisher', 'publish_date', 'scrape_date', 'category', 'title', 'subtitle', 'thumb', 'content',
+            'article_type', 'article_photo', 'article_caption', 'article_video', 'article_insta',
+            'author_name', 'author_type', 'author_url',
+            'fblikes', 'twlikes']
 
-    for article in articles:
-        f.write("{}\n".format(json.dumps(article)))
+    articles_df = pd.DataFrame(articles)
+    articles_df['scrape_date'] = datetime.now()
+
+    missing_cols = set(cols) - set(articles_df.columns.values)
+    for col in missing_cols:
+        articles_df[col] = np.NaN
+    articles_df['publisher'] = 'stabmag'
+    articles_df['scrape_date'] = datetime.now()
+    articles_df = articles_df[cols]
+
+    print("\nWriting {} articles to RDS...".format(articles_df.shape[0]))
+    print(articles_df)
+
+    articles_df.to_sql(name='articles', con=get_rds_engine(), if_exists='append', index=False)
 
 
 def load_already_scraped_articles():
-    """ We don't want to waste time scraping pages we've already scraped before. So read in all the data and capture
-    the existing URLs
+    """ Query the database for all articles that have already been scraped
 
     :return: a list of urls of articles that have already been scraped
     """
     global ALREADY_SCRAPED
 
-    if not os.path.exists(get_json_filename()):
-        get_logger().warn("The articles file does not yet exist")
-        return
-
-    with open(get_json_filename(), 'r') as f:
-        print("Found Stabmag articles file: {}".format(f.name))
-        for line in f:
-            print(line)
-            article = json.loads(line)
-            ALREADY_SCRAPED.add(article['uri'])
+    query = """
+     SELECT uri
+       FROM articles
+      WHERE publisher = 'stabmag'
+    """
+    articles_df = pd.read_sql(query, get_rds_engine())
+    ALREADY_SCRAPED = set(articles_df.uri)
 
     get_logger().debug("Found {} articles already scraped".format(len(ALREADY_SCRAPED)))
 
@@ -154,6 +178,9 @@ def scrape_article(article):
     source = get_driver('article').clean_unicode(get_driver('article').driver.page_source)
     soup = BeautifulSoup(source, "html.parser")
     article_soup = soup.find("article", class_="container")
+    if article_soup is None:
+        get_logger().warning("Can't find the article. Skipping. {}".format(url))
+        return None
 
     # Get the title and subtitle
     title_h1 = article_soup.find("h1")
@@ -176,11 +203,18 @@ def scrape_article(article):
     content_div = article_soup.find("div", {"class": "content editable"})
     content = content_div.get_text().strip()
     content = content.replace(u'\xa0', u' ')
-    article['text_content'] = content
+    article['content'] = content
 
     author_json = get_author(post_meta_div, content_div)
     if author_json:
-        article['author'] = author_json
+        if 'uri' in author_json:
+            article['author_url'] = author_json['uri']
+        else:
+            article['author_url'] = ''
+        if 'name' in author_json:
+            article['author_name'] = author_json['name']
+        else:
+            article['author_name'] = ''
 
     return article
 
@@ -194,7 +228,6 @@ def extract_articles(posts):
     """
     global ALREADY_SCRAPED
 
-    new_article_count = 0
     articles = []
 
     posts_html = posts.get_attribute('innerHTML')
@@ -210,12 +243,13 @@ def extract_articles(posts):
         # print(article_div.prettify())
         url = SITE + article_div.find('a', class_='feed-hero').get('href')
         if url in ALREADY_SCRAPED:
+            print("already scraped {}, skipping...".format(url))
             continue
-        else:
-            new_article_count += 1
-        thumb = article_div.find('img').get('src')
 
-        article_json = {'uri': url, 'thumb': thumb}
+        article_json = {
+            'uri': url,
+            'thumb': article_div.find('img').get('src')
+        }
         article_json = scrape_article(article_json)
 
         if article_json is not None:
@@ -225,13 +259,10 @@ def extract_articles(posts):
         else:
             print("Couldn't scrape {}".format(url))
 
-    # We want to save each page as we crawl so we'll never lose too much...
-    write_articles_to_file(articles)
-
-    return new_article_count
+    return articles
 
 
-def scrape():
+def scrape_pages():
     """ Stab's site doesn't allow direct requests to paging, so we have to simulate usage of the site to get
     all the article URLs
 
@@ -249,17 +280,21 @@ def scrape():
     time.sleep(DEFAULT_SLEEP_SECS)
     get_logger().debug("Got the news page")
 
-    for _ in range(20):
+    # Scrape the first PAGES_TO_SCRAPE pages, even if there isn't a single new article on a page
+    for _ in range(PAGES_TO_SCRAPE):
         posts = get_driver('site').driver.find_element_by_id('blog-list')
-        new_articles_count = extract_articles(posts)
-        if new_articles_count == 0:
-            get_logger().debug("We've already scraped all the articles found on this page")
-        time.sleep(DEFAULT_SLEEP_SECS)
 
+        articles_json = extract_articles(posts)
+        if len(articles_json) == 0:
+            get_logger().debug("We've already scraped all the articles found on this page")
+        else:
+            write_articles_to_rds(articles_json)
+
+        time.sleep(DEFAULT_SLEEP_SECS)
         try:
             next_button = get_driver('site').driver.find_element(By.XPATH, '//a[text()="Next Page"]')
         except:
-            get_driver('site').driver.get_screenshot_as_file("error_{}.png".format(time.time()))
+            get_driver('site').driver.get_screenshot_as_file("log/error_images/stabmag/error_{}.png".format(time.time()))
             get_logger().error('Failed to find "Next Page" link', exc_info=True)
             get_logger().info('page source...\n{}'.format(get_driver('site').driver.page_source))
             exit()
@@ -283,4 +318,4 @@ if __name__ == "__main__":
 
     load_already_scraped_articles()
 
-    scrape()
+    scrape_pages()
