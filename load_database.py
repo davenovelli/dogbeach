@@ -1,6 +1,5 @@
 import os
 import json
-import pymysql
 import numpy as np
 import pandas as pd
 
@@ -18,14 +17,6 @@ host = 'yew-review-test.c2usv7nad3n6.us-west-2.rds.amazonaws.com'
 port = 3306
 database = 'yewreview'
 table = 'articles'
-
-conn = pymysql.connect(host=host,
-                       port=port,
-                       user=user,
-                       passwd=passw,
-                       db=database,
-                       use_unicode=True,
-                       charset='utf8mb4')
 
 engine = create_engine('mysql+pymysql://{}:{}@{}:{}/{}'.format(user, passw, host, port, database), encoding='utf8', convert_unicode=True)
 
@@ -88,6 +79,7 @@ def load_stabmag():
     return df3
 
 
+
 def load_theinertia():
     print("start...")
     records = []
@@ -125,36 +117,33 @@ def load_theinertia():
     print(df.head())
     print(df.dtypes)
 
-    records = []
-    with open('./data/theinertia_articles.json') as f:
-        for line in f:
-            # This is a horrible hack to work around the newlines in the article text. Can't figure out any other solution
-            records += [json.loads(line.replace("\n", "\\n")[:-2])]
-
-    df2 = (
-        pd.DataFrame(records)#[['uri', 'publish_date', 'title', 'subtitle', 'thumb']]
-            .drop_duplicates('uri')
-    )
-    print(df2)
+    # The thumbs are all in a csv **looks up towards the heavens in annoyance** so load and merge those in...
+    df2 = pd.read_csv('data/theinertia_articles.csv').rename(columns={'url': 'uri'})
+    df2.uri = df2.uri.map(lambda x: "https://www.theinertia.com/{}".format(x))
+    # For some reason in late 2019 the scraper stopped working on the thumbnails, drop them, we'll rescrape
+    df2 = df2[df2.thumb.str.lower() != 'none']
+    df2.thumb = df2.thumb.map(lambda x: x[2:])
+    print(df2.head())
     print(df2.dtypes)
 
-    df3 = df2[['uri', 'thumb']].merge(df, how='outer').sort_values('publish_date')
-    df3['publisher'] = 'theintertia'
+    df3 = df2[['uri', 'thumb']].merge(df, how='inner').sort_values('publish_date', ascending=False)
+    df3['publisher'] = 'theinertia'
     # Fix the inconsistent datetime format (why does that exist? Probably need to fix that)
     df3.loc[df3.publish_date.str.contains('UTC'), 'publish_date'] = df3.publish_date.map(lambda x: x.replace('UTC', ' ')[:-1])
     df3.loc[df3.publish_date.str.contains('GMT-0700'), 'publish_date'] = df3.publish_date.map(lambda x: x.replace('GMT-0700', ' ')[:-6])
     df3.publish_date = pd.to_datetime(df3.publish_date)
+    df3.sort_values('publish_date', ascending=False, inplace=True)
 
     print(df3.shape)
     print(df3.dtypes)
-    print(df3[['uri', 'publish_date', 'author_name']].head(3))
+    print(df3[['uri', 'thumb', 'publish_date', 'author_name']].head())
 
     return df3
 
 
 if __name__ == '__main__':
-    df_stabmag = load_stabmag()
-    print(df_stabmag.dtypes)
+    # df_stabmag = load_stabmag()
+    # print(df_stabmag.dtypes)
 
     df_inertia = load_theinertia()
     print(df_inertia.dtypes)
@@ -164,14 +153,24 @@ if __name__ == '__main__':
             'author_name', 'author_type', 'author_url',
             'fblikes', 'twlikes']
 
-    df = (
-        pd.concat([df_stabmag, df_inertia], sort=False)[cols]
-            .sort_values('publish_date')
-            .reset_index(drop=True)
-    )
+    ########################
+    # When importing both
+    # df = (
+    #     pd.concat([df_stabmag, df_inertia], sort=False)[cols]
+    #         .sort_values('publish_date')
+    #         .reset_index(drop=True)
+    # )
+
+    ########################
+    # When importing just The Intertia
+    df = df_inertia.sort_values('publish_date', ascending=False).reset_index(drop=True)
+
     df.publish_date = pd.to_datetime(df.publish_date)
+    df.scrape_date = pd.to_datetime(df.scrape_date)
     df.fblikes = df.fblikes.map(lambda x: -1 if pd.isnull(x) else int(x))
     df.twlikes = df.twlikes.map(lambda x: -1 if (pd.isnull(x) or x == 'null') else int(x))
+
+    df.drop_duplicates(inplace=True)
 
     print(df.head())
     print(df.shape)
