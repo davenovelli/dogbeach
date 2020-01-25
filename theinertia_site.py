@@ -1,5 +1,6 @@
 import os
 import sys
+import pytz
 import atexit
 import urllib
 import logging
@@ -23,6 +24,9 @@ pd.set_option('display.width', 500)
 _logger = None
 _engine = None
 _driver = None
+
+# We want all times to be in westcoast time
+WESTCOAST = pytz.timezone('US/Pacific')
 
 # Track the list of article urls that have already been scraped
 ALREADY_SCRAPED = set()
@@ -107,13 +111,12 @@ def write_articles_to_rds(articles):
         'insta': 'article_insta',
         'text_content': 'content'
     }, inplace=True)
-    articles_df['scrape_date'] = datetime.now()
 
     missing_cols = set(cols) - set(articles_df.columns.values)
     for col in missing_cols:
         articles_df[col] = np.NaN
     articles_df['publisher'] = 'theinertia'
-    articles_df['scrape_date'] = datetime.now()
+    articles_df['scrape_date'] = datetime.now(WESTCOAST)
     articles_df = articles_df[cols]
 
     get_logger().debug("\nWriting {} articles to RDS...".format(articles_df.shape[0]))
@@ -396,7 +399,8 @@ def cleanup():
 
 
 if __name__ == "__main__":
-    get_logger().info("Kicking off The Inertia scraper...")
+    kickoff_time = datetime.now(WESTCOAST).strftime('%Y-%m-%d %H:%M:%S')
+    get_logger().info("Kicking off The Inertia scraper at {}...".format(kickoff_time))
 
     # To get the script to see files in this directory (including chromedriver)
     os.chdir(os.path.dirname(sys.argv[0]))

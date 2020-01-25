@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import pytz
 import time
 import atexit
 import logging
@@ -22,17 +23,21 @@ pd.set_option('display.max_colwidth', 50)
 pd.set_option('display.width', 500)
 
 
+_logger = None
+_engine = None
+_drivers = {}
+
+
 SITE = "https://stabmag.com"
 NEWS_URL = "https://stabmag.com/news/"
 
 DEFAULT_SLEEP_SECS = 10
 
-_logger = None
-_engine = None
-_drivers = {}
-
 ALREADY_SCRAPED = set()
 PAGES_TO_SCRAPE = 1
+
+# We want all times to be in westcoast time
+WESTCOAST = pytz.timezone('US/Pacific')
 
 
 def get_logger():
@@ -91,13 +96,12 @@ def write_articles_to_rds(articles):
             'fblikes', 'twlikes']
 
     articles_df = pd.DataFrame(articles)
-    articles_df['scrape_date'] = datetime.now()
 
     missing_cols = set(cols) - set(articles_df.columns.values)
     for col in missing_cols:
         articles_df[col] = np.NaN
     articles_df['publisher'] = 'stabmag'
-    articles_df['scrape_date'] = datetime.now()
+    articles_df['scrape_date'] = datetime.now(WESTCOAST)
     articles_df = articles_df[cols]
 
     print("\nWriting {} articles to RDS...".format(articles_df.shape[0]))
@@ -311,7 +315,8 @@ def cleanup():
 
 
 if __name__ == "__main__":
-    get_logger().info("Kicking off Stabmag scraper...")
+    kickoff_time = datetime.now(WESTCOAST).strftime('%Y-%m-%d %H:%M:%S')
+    get_logger().info("Kicking off the Stabmag scraper at {}...".format(kickoff_time))
 
     # To get the script to see files in this directory (including chromedriver)
     os.chdir(os.path.dirname(sys.argv[0]))
