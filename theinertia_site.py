@@ -46,6 +46,8 @@ CATEGORIES = {
     'women': 32700
 }
 
+MAX_SCRAPED_PAGES_BEFORE_QUIT = 10
+
 
 def get_logger():
     """ Initialize and/or return existing logger object
@@ -117,9 +119,12 @@ def write_articles_to_rds(articles):
         articles_df[col] = np.NaN
     articles_df['publisher'] = 'theinertia'
     articles_df['scrape_date'] = datetime.now(WESTCOAST)
+    articles_df['scrape_date'] = articles_df.scrape_date.apply(lambda x: datetime.replace(x, tzinfo=None))
     articles_df = articles_df[cols]
 
     get_logger().debug("\nWriting {} articles to RDS...".format(articles_df.shape[0]))
+
+    articles_df.scrape_date = articles_df.scrape_date
 
     articles_df.to_sql(name='articles', con=get_rds_engine(), if_exists='append', index=False)
 
@@ -257,7 +262,7 @@ def scrape_article(article):
     # print("category: {}".format(category))
 
     # Title
-    title = article_soup.find("h1", {"itemprop": "name"}).get_text().strip().lstrip(category).lstrip()
+    title = article_soup.find("h1", {"itemprop": "name"}).get_text().strip()
     # print("title: {}".format(title))
 
     # Publication Date
@@ -383,12 +388,14 @@ def scrape():
 
             extracted_count = extract_articles(cat, source)
             if extracted_count == 0:
-                if empty_pages < 2:
+                if empty_pages < MAX_SCRAPED_PAGES_BEFORE_QUIT:
                     empty_pages += 1
                     continue
                 else:
                     get_logger().info("All articles on page {} have already been scraped, exiting...".format(int(pagenum/12)))
                     break
+            else:
+                empty_pages = 0
 
     get_logger().info("Successfully completed scrape of latest The Inertia news.")
 
