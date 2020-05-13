@@ -122,7 +122,7 @@ def write_articles_to_rds(articles):
     articles_df['scrape_date'] = articles_df.scrape_date.apply(lambda x: datetime.replace(x, tzinfo=None))
     articles_df = articles_df[cols]
 
-    get_logger().debug("\nWriting {} articles to RDS...".format(articles_df.shape[0]))
+    get_logger().debug("Writing {} articles to RDS...\n".format(articles_df.shape[0]))
 
     articles_df.scrape_date = articles_df.scrape_date
 
@@ -310,7 +310,7 @@ def extract_articles(category, post_source):
         article_divs = soup.find_all("div", class_="item")
         if len(article_divs) == 0:
             get_logger().warn("No articles found to extract")
-            return
+            return 0
 
     # From each article div, extract the partial content (url, thumbnail, category) from the card
     articles = []

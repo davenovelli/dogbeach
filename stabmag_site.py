@@ -104,7 +104,7 @@ def write_articles_to_rds(articles):
     articles_df['scrape_date'] = datetime.now(WESTCOAST)
     articles_df = articles_df[cols]
 
-    print("\nWriting {} articles to RDS...".format(articles_df.shape[0]))
+    print("Writing {} articles to RDS...\n".format(articles_df.shape[0]))
     print(articles_df)
 
     articles_df.to_sql(name='articles', con=get_rds_engine(), if_exists='append', index=False)
