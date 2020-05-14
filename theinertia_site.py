@@ -46,7 +46,8 @@ CATEGORIES = {
     'women': 32700
 }
 
-MAX_SCRAPED_PAGES_BEFORE_QUIT = 10
+# How many pages of articles that we've entirely scraped should we try before quitting?
+MAX_SCRAPED_PAGES_BEFORE_QUIT = 3
 
 
 def get_logger():
@@ -99,6 +100,8 @@ def write_articles_to_rds(articles):
     :param articles:
     :return:
     """
+    global ALREADY_SCRAPED
+
     cols = ['uri', 'publisher', 'publish_date', 'scrape_date', 'category', 'title', 'subtitle', 'thumb', 'content',
             'article_type', 'article_photo', 'article_caption', 'article_video', 'article_insta',
             'author_name', 'author_type', 'author_url',
@@ -122,11 +125,14 @@ def write_articles_to_rds(articles):
     articles_df['scrape_date'] = articles_df.scrape_date.apply(lambda x: datetime.replace(x, tzinfo=None))
     articles_df = articles_df[cols]
 
+    # Drop any duplicates from this page (the inertia sometimes has dupes)
+    articles_df = articles_df.groupby('uri').first().reset_index()
+
     get_logger().debug("Writing {} articles to RDS...\n".format(articles_df.shape[0]))
-
-    articles_df.scrape_date = articles_df.scrape_date
-
     articles_df.to_sql(name='articles', con=get_rds_engine(), if_exists='append', index=False)
+
+    # Add whatever urls that were just added to the already scraped set, since the inertia has duplicates
+    ALREADY_SCRAPED.update(articles_df.uri.tolist())
 
 
 def get_article_content(soup, article):
@@ -388,7 +394,7 @@ def scrape():
 
             extracted_count = extract_articles(cat, source)
             if extracted_count == 0:
-                if empty_pages < MAX_SCRAPED_PAGES_BEFORE_QUIT:
+                if empty_pages <= MAX_SCRAPED_PAGES_BEFORE_QUIT:
                     empty_pages += 1
                     continue
                 else:
