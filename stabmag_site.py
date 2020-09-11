@@ -5,6 +5,7 @@ import pytz
 import time
 import atexit
 import logging
+import requests
 import numpy as np
 import pandas as pd
 
@@ -12,7 +13,6 @@ from pathlib import Path
 from bs4 import BeautifulSoup
 from datetime import datetime
 from selenium.webdriver.common.by import By
-from sqlalchemy import create_engine
 
 from dogbeach import doglog
 from dogbeach.dogdriver import DogDriver
@@ -22,6 +22,21 @@ pd.set_option('display.max_columns', None)
 pd.set_option('display.max_colwidth', 50)
 pd.set_option('display.width', 500)
 
+
+# API endpoint configuration
+# TODO: Update this to use environment variables
+REST_API_PROTOCOL = "http"
+REST_API_HOST = "localhost"
+REST_API_PORT = "8081"
+REST_API_URL = f"{REST_API_PROTOCOL}://{REST_API_HOST}:{REST_API_PORT}"
+CREATE_ENDPOINT = f"{REST_API_URL}/article"
+PUBLISHER_ARTICLES_ENDPOINT = f"{REST_API_URL}/articleUrlsByPublisher?publisher=stabmag"
+
+# UserID and BrowswerID are required fields for creating articles, this User is the ID tied to the system account
+SYSTEM_USER_ID = 5
+# TODO: Remove this - Browser ID is not a required field for the articles table
+# This is the "blank" UUID
+SCRAPER_BROWSER_ID = '00000000-0000-0000-0000-000000000000'
 
 _logger = None
 _engine = None
@@ -34,7 +49,7 @@ NEWS_URL = "https://stabmag.com/news/"
 DEFAULT_SLEEP_SECS = 10
 
 ALREADY_SCRAPED = set()
-PAGES_TO_SCRAPE = 1
+PAGES_TO_SCRAPE = 4
 
 # We want all times to be in westcoast time
 WESTCOAST = pytz.timezone('US/Pacific')
@@ -59,7 +74,7 @@ def get_driver(name='default'):
     """
     global _drivers
     if name not in _drivers:
-        _drivers[name] = DogDriver(get_logger())
+        _drivers[name] = DogDriver(get_logger(), DEFAULT_SLEEP_SECS)
     return _drivers[name]
 
 
@@ -84,32 +99,6 @@ def get_rds_engine():
     return _engine
 
 
-def write_articles_to_rds(articles):
-    """
-
-    :param articles:
-    :return:
-    """
-    cols = ['uri', 'publisher', 'publish_date', 'scrape_date', 'category', 'title', 'subtitle', 'thumb', 'content',
-            'article_type', 'article_photo', 'article_caption', 'article_video', 'article_insta',
-            'author_name', 'author_type', 'author_url',
-            'fblikes', 'twlikes']
-
-    articles_df = pd.DataFrame(articles)
-
-    missing_cols = set(cols) - set(articles_df.columns.values)
-    for col in missing_cols:
-        articles_df[col] = np.NaN
-    articles_df['publisher'] = 'stabmag'
-    articles_df['scrape_date'] = datetime.now(WESTCOAST)
-    articles_df = articles_df[cols]
-
-    print("Writing {} articles to RDS...\n".format(articles_df.shape[0]))
-    print(articles_df)
-
-    articles_df.to_sql(name='articles', con=get_rds_engine(), if_exists='append', index=False)
-
-
 def load_already_scraped_articles():
     """ Query the database for all articles that have already been scraped
 
@@ -117,15 +106,12 @@ def load_already_scraped_articles():
     """
     global ALREADY_SCRAPED
 
-    query = """
-     SELECT uri
-       FROM articles
-      WHERE publisher = 'stabmag'
-    """
-    articles_df = pd.read_sql(query, get_rds_engine())
-    ALREADY_SCRAPED = set(articles_df.uri)
-
+    r = requests.get(PUBLISHER_ARTICLES_ENDPOINT)
+    urls_json = r.json()
+    ALREADY_SCRAPED = set([x['url'].rstrip('/').split("/")[-1] for x in urls_json])
     get_logger().debug("Found {} articles already scraped".format(len(ALREADY_SCRAPED)))
+
+    return
 
 
 def get_author(post_meta, content_div):
@@ -148,7 +134,7 @@ def get_author(post_meta, content_div):
             author_link = post_author_span.find("a")
             author_url = 'https://stabmag.com/' + author_link.get('href')
             author_name = author_link.get_text().title()
-            author_json['uri'] = author_url
+            author_json['url'] = author_url
         elif len(content_div.find_all(text="Story by")) > 0:
             author_name = content_div.find_all(text="Story by")[0].get_text().lower().replace('story by', '').title()
         elif 'class' in post_author_span.attrs and 'post-meta-last' in post_author_span.get("class"):
@@ -172,7 +158,7 @@ def scrape_article(article):
     :return: the the populated dictionary, to be written to file as json - or None if we can't load the page
     """
     # Load the article and wait for it to load
-    url = article['uri']
+    url = article['url']
 
     if not get_driver('article').get_url(url):
         # We'll just have to skip this slug, can't load it even with retries
@@ -201,24 +187,20 @@ def scrape_article(article):
     post_meta_div = article_soup.find("div", class_="blog-post-meta")
     post_date_div = post_meta_div.find_all("div")[0]
     post_date = post_date_div.find_all("span")[1].find("a").get('href').replace("/news/archive/", "").replace("/", "-")
-    article['publish_date'] = post_date
+    article['publishedAt'] = post_date
 
     # Get the content
     content_div = article_soup.find("div", {"class": "content editable"})
     content = content_div.get_text().strip()
     content = content.replace(u'\xa0', u' ')
-    article['content'] = content
+    article['text_content'] = content
 
     author_json = get_author(post_meta_div, content_div)
     if author_json:
-        if 'uri' in author_json:
-            article['author_url'] = author_json['uri']
-        else:
-            article['author_url'] = ''
+        if 'url' in author_json:
+            article['author_url'] = author_json['url']
         if 'name' in author_json:
             article['author_name'] = author_json['name']
-        else:
-            article['author_name'] = ''
 
     return article
 
@@ -241,29 +223,56 @@ def extract_articles(posts):
     # print("soup_text: {}".format(soup.prettify()))
 
     article_divs = soup.find_all("div", class_='grid-layout')
-    first_url = article_divs[0].find('a', class_='feed-hero').get('href')
+    first_url = article_divs[0].find('a', class_='feed-hero').get('href').rstrip('/')
     get_logger().info("Extracting {} articles starting with: {}".format(len(article_divs), first_url))
     for article_div in article_divs:
         # print(article_div.prettify())
-        url = SITE + article_div.find('a', class_='feed-hero').get('href')
-        if url in ALREADY_SCRAPED:
+        url = SITE + article_div.find('a', class_='feed-hero').get('href').rstrip('/')
+        if url.split('/')[-1] in ALREADY_SCRAPED:
             print("already scraped {}, skipping...".format(url))
             continue
+        else:
+            print("new article found: {}".format(url))
+            # Just in case there are duplicates
+            ALREADY_SCRAPED.add(url.split('/')[-1])
 
         article_json = {
-            'uri': url,
+            'url': url,
             'thumb': article_div.find('img').get('src')
         }
         article_json = scrape_article(article_json)
 
         if article_json is not None:
             articles += [article_json]
-            print(json.dumps(article_json))
+            # print(json.dumps(article_json))
             # get_logger().debug("extracted article: {}".format(json.dumps(article_json)))
         else:
             print("Couldn't scrape {}".format(url))
 
     return articles
+
+
+def create_articles(articles):
+    """ Create articles using the REST API
+
+    :param articles:
+    :return:
+    """
+    for article in articles:
+      print(f"creating article: {article['url']}")
+
+      # Add some common fields
+      article['userId'] = SYSTEM_USER_ID
+      article['browserId'] = SCRAPER_BROWSER_ID
+      article['publisher'] = 'stabmag'
+      get_logger().debug("Writing article to RDS...\n{}".format(article))
+
+      header = { "Content-Type": "application/json" }
+      r = requests.post(CREATE_ENDPOINT, headers=header, data=json.dumps(article, default=str))
+      try:
+        r.raise_for_status()
+      except Exception as ex:
+        get_logger().error(f"There was a {type(ex)} error while creating article {article['url']}:...\n{r}")
 
 
 def scrape_pages():
@@ -285,15 +294,16 @@ def scrape_pages():
     get_logger().debug("Got the news page")
 
     # Scrape the first PAGES_TO_SCRAPE pages, even if there isn't a single new article on a page
+    articles = []
     for _ in range(PAGES_TO_SCRAPE):
         posts = get_driver('site').driver.find_element_by_id('blog-list')
 
-        articles_json = extract_articles(posts)
-        if len(articles_json) == 0:
+        post_articles = extract_articles(posts)
+        if len(post_articles) == 0:
             get_logger().debug("We've already scraped all the articles found on this page")
         else:
-            write_articles_to_rds(articles_json)
-
+            articles += post_articles
+            
         time.sleep(DEFAULT_SLEEP_SECS)
         try:
             next_button = get_driver('site').driver.find_element(By.XPATH, '//a[text()="Next Page"]')
@@ -304,6 +314,10 @@ def scrape_pages():
             exit()
 
         next_button.click()
+    
+    # Now, write all the articles we found to RDS
+    ordered = list(reversed(articles))
+    create_articles(ordered)
 
     get_logger().info("Successfully completed scrape of latest Stab Mag news.")
 
