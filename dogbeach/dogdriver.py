@@ -12,8 +12,9 @@ from selenium.common.exceptions import WebDriverException
 class DogDriver:
     """ This class will support scraping activities through ChromeDriver """
 
-    def __init__(self, logger=None, sleep=5, tries=10, backoff=.4):
+    def __init__(self, logger=None, sleep=5, tries=10, backoff=.4, pageload_timeout=15):
         self.driver = self.init_driver()
+        self.driver.set_page_load_timeout(pageload_timeout)
         self.sleep = sleep
         self.tries = tries
         self.backoff = 1 + backoff
@@ -36,6 +37,7 @@ class DogDriver:
         options.add_argument('--disable-extensions')
         options.add_argument('--disable-gpu')
         options.add_argument('--no-sandbox')
+        options.add_argument('--no-proxy-server')
 
         # download the chrome driver from https://sites.google.com/a/chromium.org/chromedriver/downloads and put it in
         # the current directory
@@ -61,13 +63,13 @@ class DogDriver:
             self.driver.get(url)
             time.sleep(s)
             return True
-        except WebDriverException:
-            if self.logger is not None:
-                self.logger.warn('Error retrieving page after waiting {} seconds: {}'.format(s, url), exc_info=True)
         except TimeoutException:
             if self.logger is not None:
                 self.logger.error("TimeoutException on: {}".format(url), exc_info=True)
-
+        except WebDriverException:
+            if self.logger is not None:
+                self.logger.warn('Error retrieving page after waiting {} seconds: {}'.format(s, url), exc_info=True)
+        
         # If this is the last attempt, log an error and return False
         if t == 1:
             if self.logger is not None:
