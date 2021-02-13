@@ -32,6 +32,7 @@ class DogDriver:
         """
         # instantiate a chrome options object so you can set the size and headless preference
         options = Options()
+        options.add_experimental_option("excludeSwitches", ['enable-automation'])
         options.add_argument("--headless")
         options.add_argument("--window-size=1920x1080")
         options.add_argument('--disable-extensions')
