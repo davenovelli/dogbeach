@@ -74,7 +74,7 @@ def get_logger():
     """
     global _logger
     if _logger is None:
-        logfile = Path(os.path.dirname(os.path.realpath(__file__))) / "log/theinertia_site.log"
+        logfile = Path(os.path.dirname(os.path.realpath("__file__"))) / "log/theinertia_site.log"
         _logger = doglog.setup_logger('theinertia_site', logfile, clevel=logging.DEBUG)
     return _logger
 

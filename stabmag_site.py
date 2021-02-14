@@ -62,7 +62,7 @@ def get_logger():
     """
     global _logger
     if _logger is None:
-        logfile = Path(os.path.dirname(os.path.realpath(__file__))) / "log/stabmag_site.log"
+        logfile = Path(os.path.dirname(os.path.realpath("__file__"))) / "log/stabmag_site.log"
         _logger = doglog.setup_logger('stabmag_site', logfile, clevel=logging.INFO)
     return _logger
 
