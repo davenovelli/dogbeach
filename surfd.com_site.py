@@ -288,14 +288,12 @@ def extract_new_links():
         if len(cat_links) == 0:
             # Try a different format
             cat_links = sel.xpath("*//article//descendant::div[@class='mask'][1]//descendant::a[1]/@href").extract()
-            print('\n'.join(cat_links))
 
         # Filter out links we've already scraped, and/or duplicates (which we've seen before even in the same category)
         start_link_count = len(cat_links)
         cat_links = list(set([x for x in cat_links if x not in ALREADY_SCRAPED]))
-        print(f"{len(cat_links)} of {start_link_count} links in this category are new")
-        
-        print("\n".join(sorted(cat_links)))
+        get_logger().info(f"{len(cat_links)} of {start_link_count} links in this category are new")
+        get_logger().info("\n".join(sorted(cat_links)))
         if len(cat_links) > 0:
             all_links += cat_links
     
