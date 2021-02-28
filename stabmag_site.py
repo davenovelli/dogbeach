@@ -3,6 +3,7 @@ import sys
 import json
 import pytz
 import time
+import yaml
 import atexit
 import logging
 import requests
@@ -17,86 +18,94 @@ from selenium.webdriver.common.by import By
 from dogbeach import doglog
 from dogbeach.dogdriver import DogDriver
 
-
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_colwidth', 50)
 pd.set_option('display.width', 500)
-
-
-# API endpoint configuration
-# TODO: Update this to use environment variables
-REST_API_PROTOCOL = "http"
-REST_API_HOST = "localhost"
-REST_API_PORT = "8081"
-REST_API_URL = f"{REST_API_PROTOCOL}://{REST_API_HOST}:{REST_API_PORT}"
-CREATE_ENDPOINT = f"{REST_API_URL}/article"
-PUBLISHER_ARTICLES_ENDPOINT = f"{REST_API_URL}/articleUrlsByPublisher?publisher=stabmag"
-
-# UserID and BrowswerID are required fields for creating articles, this User is the ID tied to the system account
-SYSTEM_USER_ID = 5
-# TODO: Remove this - Browser ID is not a required field for the articles table
-# This is the "blank" UUID
-SCRAPER_BROWSER_ID = '00000000-0000-0000-0000-000000000000'
 
 _logger = None
 _engine = None
 _drivers = {}
 
+PUBLISHER = 'stabmag'
+
+##################################### Config
+with open("config.yml", "r") as ymlfile:
+    config = yaml.load(ymlfile, Loader=yaml.FullLoader)
+
+# Log level
+levels = {
+    'INFO': logging.INFO,
+    'DEBUG': logging.DEBUG,
+    'WARN': logging.WARN,
+    'ERROR': logging.ERROR
+}
+clevel_key = config[PUBLISHER]['log_clevel'] if 'log_clevel' in config[PUBLISHER] else 'WARN'
+CLEVEL = levels[clevel_key] if clevel_key in levels else levels['WARN']
+
+# What is the API endpoint
+REST_API_PROTOCOL = config['common']['rest_api']['protocol']
+REST_API_HOST = config['common']['rest_api']['host']
+REST_API_PORT = config['common']['rest_api']['port']
+REST_API_URL = f"{REST_API_PROTOCOL}://{REST_API_HOST}:{REST_API_PORT}"
+CREATE_ENDPOINT = f"{REST_API_URL}/article"
+PUBLISHER_ARTICLES_ENDPOINT = f"{REST_API_URL}/articleUrlsByPublisher?publisher={PUBLISHER}"
+
+# UserID and BrowswerID are required fields for creating articles, this User is the ID tied to the system account
+SYSTEM_USER_ID = config['common']['system_user_id']
+
+# This is the "blank" UUID
+SCRAPER_BROWSER_ID = config['common']['browser_id']
+
+# How long in between requests, in seconds
+SLEEP = config[PUBLISHER]['sleep'] if 'sleep' in config[PUBLISHER] else None
+
+# How many times should we attempt to load a page before going to next one?
+RETRIES = config[PUBLISHER]['retries'] if 'retries' in config[PUBLISHER] else None
+
+# How long to wait before giving up on a page load
+PAGELOAD_TIMEOUT = config[PUBLISHER]['page_load_timeout'] if 'page_load_timeout' in config[PUBLISHER] else None
+
+# How many pages of articles that we've already scraped fully should we try before quitting?
+MAX_SCRAPED_PAGES_BEFORE_QUIT = config[PUBLISHER]['max_empty_pages']
 
 SITE = "https://stabmag.com"
+
 NEWS_URL = "https://stabmag.com/news/"
-
-DEFAULT_SLEEP_SECS = 10
-
-ALREADY_SCRAPED = set()
-PAGES_TO_SCRAPE = 4
 
 # We want all times to be in westcoast time
 WESTCOAST = pytz.timezone('US/Pacific')
 
+# Track the list of article urls that have already been scraped
+already_scraped = set()
 
 def get_logger():
     """ Initialize and/or return existing logger object
 
-    :return:
+    :return: a DogLog logger object
     """
     global _logger
     if _logger is None:
-        logfile = Path(os.path.dirname(os.path.realpath("__file__"))) / "log/stabmag_site.log"
-        _logger = doglog.setup_logger('stabmag_site', logfile, clevel=logging.INFO)
+        logfile = Path(os.path.dirname(os.path.realpath("__file__"))) / f"log/{PUBLISHER}_site.log"
+        _logger = doglog.setup_logger(f'{PUBLISHER}_site', logfile, clevel=CLEVEL)
     return _logger
 
 
 def get_driver(name='default'):
     """ Initialize and/or return existing webdriver object
 
-    :return:
+    :return: a DogDriver object
     """
     global _drivers
     if name not in _drivers:
-        _drivers[name] = DogDriver(get_logger(), DEFAULT_SLEEP_SECS)
+        _drivers[name] = DogDriver(get_logger())
+        if SLEEP:
+            _drivers[name].sleep = SLEEP
+        if RETRIES:
+            _drivers[name].tries = RETRIES
+        if PAGELOAD_TIMEOUT:
+            _drivers[name].set_pageload_timeout(PAGELOAD_TIMEOUT)
+    
     return _drivers[name]
-
-
-def get_rds_engine():
-    """ Get the sqlalchemy engine object to read from RDS
-
-    :return: SqlAlchemy engine object
-    """
-    try:
-        user = os.environ['YEWREVIEW_RDS_USER']
-        pw = os.environ['YEWREVIEW_RDS_PASS']
-        host = os.environ['YEWREVIEW_RDS_HOST']
-        port = os.environ['YEWREVIEW_RDS_PORT']
-    except:
-        get_logger().debug("Required database connection environment variable missing")
-        raise
-
-    global _engine
-    if _engine is None:
-        _engine = create_engine('mysql+pymysql://{}:{}@{}:{}/yewreview'.format(user, pw, host, port), encoding='utf8')
-
-    return _engine
 
 
 def load_already_scraped_articles():
@@ -104,12 +113,12 @@ def load_already_scraped_articles():
 
     :return: a list of urls of articles that have already been scraped
     """
-    global ALREADY_SCRAPED
+    global already_scraped
 
     r = requests.get(PUBLISHER_ARTICLES_ENDPOINT)
     urls_json = r.json()
-    ALREADY_SCRAPED = set([x['url'].rstrip('/').split("/")[-1] for x in urls_json])
-    get_logger().debug("Found {} articles already scraped".format(len(ALREADY_SCRAPED)))
+    already_scraped = set([x['url'].rstrip('/').split("/")[-1] for x in urls_json])
+    get_logger().debug("Found {} articles already scraped".format(len(already_scraped)))
 
     return
 
@@ -212,7 +221,7 @@ def extract_articles(posts):
     :param posts:
     :return: an array of tuples representing the articles on this page (links/images/shares/comments)
     """
-    global ALREADY_SCRAPED
+    global already_scraped
 
     articles = []
 
@@ -228,13 +237,13 @@ def extract_articles(posts):
     for article_div in article_divs:
         # print(article_div.prettify())
         url = SITE + article_div.find('a', class_='feed-hero').get('href').rstrip('/')
-        if url.split('/')[-1] in ALREADY_SCRAPED:
+        if url.split('/')[-1] in already_scraped:
             print("already scraped {}, skipping...".format(url))
             continue
         else:
             print("new article found: {}".format(url))
             # Just in case there are duplicates
-            ALREADY_SCRAPED.add(url.split('/')[-1])
+            already_scraped.add(url.split('/')[-1])
 
         article_json = {
             'url': url,
@@ -285,17 +294,17 @@ def scrape_pages():
 
     # Load the news page and wait for the posts to load
     get_driver('site').get_url(NEWS_URL)
-    time.sleep(DEFAULT_SLEEP_SECS)
+    time.sleep(SLEEP)
 
     # Click the "load more" button so we have all of the first 20 results (only for first page)
     more_button = get_driver('site').driver.find_element_by_class_name('pagination-load-more')
     more_button.click()
-    time.sleep(DEFAULT_SLEEP_SECS)
+    time.sleep(SLEEP)
     get_logger().debug("Got the news page")
 
-    # Scrape the first PAGES_TO_SCRAPE pages, even if there isn't a single new article on a page
+    # Scrape the first MAX_SCRAPED_PAGES_BEFORE_QUIT pages, even if there isn't a single new article on a page
     articles = []
-    for _ in range(PAGES_TO_SCRAPE):
+    for _ in range(MAX_SCRAPED_PAGES_BEFORE_QUIT):
         posts = get_driver('site').driver.find_element_by_id('blog-list')
 
         post_articles = extract_articles(posts)
@@ -304,7 +313,7 @@ def scrape_pages():
         else:
             articles += post_articles
             
-        time.sleep(DEFAULT_SLEEP_SECS)
+        time.sleep(SLEEP)
         try:
             next_button = get_driver('site').driver.find_element(By.XPATH, '//a[text()="Next Page"]')
         except:

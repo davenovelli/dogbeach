@@ -2,6 +2,7 @@ import os
 import re
 import sys
 import json
+import yaml
 import atexit
 import logging
 import requests
@@ -23,24 +24,42 @@ _driver = None
 
 PUBLISHER = 'surfd.com'
 
-# How long in between requests, in seconds
-SLEEP = 5
+##################################### Config
+with open("config.yml", "r") as ymlfile:
+    config = yaml.load(ymlfile, Loader=yaml.FullLoader)
+
+# Log level
+levels = {
+    'INFO': logging.INFO,
+    'DEBUG': logging.DEBUG,
+    'WARN': logging.WARN,
+    'ERROR': logging.ERROR
+}
+clevel_key = config[PUBLISHER]['log_clevel'] if 'log_clevel' in config[PUBLISHER] else 'WARN'
+CLEVEL = levels[clevel_key] if clevel_key in levels else levels['WARN']
 
 # What is the API endpoint
-# TODO: Update this to use environment variables
-REST_API_PROTOCOL = "http"
-REST_API_HOST = "localhost"
-REST_API_PORT = "8081"
+REST_API_PROTOCOL = config['common']['rest_api']['protocol']
+REST_API_HOST = config['common']['rest_api']['host']
+REST_API_PORT = config['common']['rest_api']['port']
 REST_API_URL = f"{REST_API_PROTOCOL}://{REST_API_HOST}:{REST_API_PORT}"
 CREATE_ENDPOINT = f"{REST_API_URL}/article"
 PUBLISHER_ARTICLES_ENDPOINT = f"{REST_API_URL}/articleUrlsByPublisher?publisher={PUBLISHER}"
 
 # UserID and BrowswerID are required fields for creating articles, this User is the ID tied to the system account
-SYSTEM_USER_ID = 5
+SYSTEM_USER_ID = config['common']['system_user_id']
 
-# TODO: Remove this - Browser ID is not a required field for the articles table
 # This is the "blank" UUID
-SCRAPER_BROWSER_ID = '00000000-0000-0000-0000-000000000000'
+SCRAPER_BROWSER_ID = config['common']['browser_id']
+
+# How long in between requests, in seconds
+SLEEP = config[PUBLISHER]['sleep']
+
+# How many times should we attempt to load a page before going to next one?
+RETRIES = config[PUBLISHER]['retries']
+
+# How long to wait before giving up on a page load
+PAGE_LOAD_TIMEOUT = config[PUBLISHER]['page_load_timeout']
 
 # The category page url template
 CAT_URL_TEMPLATE = 'https://surfd.com/category/{}/'
@@ -62,7 +81,7 @@ CATEGORIES = {
 }
 
 # A list of all the articles that have been scraped already, so we don't duplicate our efforts
-ALREADY_SCRAPED = set()
+already_scraped = set()
 
 
 def get_logger():
@@ -73,7 +92,7 @@ def get_logger():
     global _logger
     if _logger is None:
         logfile = Path(os.path.dirname(os.path.realpath("__file__"))) / f"log/{PUBLISHER}_site.log"
-        _logger = doglog.setup_logger(f'{PUBLISHER}_site', logfile, clevel=logging.DEBUG)
+        _logger = doglog.setup_logger(f'{PUBLISHER}_site', logfile, clevel=CLEVEL)
     return _logger
 
 
@@ -84,7 +103,7 @@ def get_driver():
     """
     global _driver
     if _driver is None:
-        _driver = DogDriver(get_logger(), sleep=SLEEP, tries=5, pageload_timeout=15)
+        _driver = DogDriver(get_logger(), sleep=SLEEP, tries=RETRIES, pageload_timeout=PAGE_LOAD_TIMEOUT)
     return _driver
 
 
@@ -93,11 +112,11 @@ def load_already_scraped_articles():
 
     :return: a list of urls of articles that have already been scraped
     """
-    global ALREADY_SCRAPED
+    global already_scraped
 
     r = requests.get(PUBLISHER_ARTICLES_ENDPOINT)
     urls_json = r.json()
-    ALREADY_SCRAPED = set([x['url'] for x in urls_json])
+    already_scraped = set([x['url'] for x in urls_json])
 
     skip_filename = Path(f'data/{PUBLISHER}/skips.txt')
     directory = os.path.dirname(skip_filename)
@@ -108,9 +127,9 @@ def load_already_scraped_articles():
       SKIPS = list(map(str.strip, skips_file.readlines()))
       # print(SKIPS)
     
-    ALREADY_SCRAPED.update(SKIPS)
+    already_scraped.update(SKIPS)
 
-    get_logger().debug("Found {} articles already scraped".format(len(ALREADY_SCRAPED)))
+    get_logger().debug("Found {} articles already scraped".format(len(already_scraped)))
 
 
 def cleanup_youtube_link(link):
@@ -291,7 +310,7 @@ def extract_new_links():
 
         # Filter out links we've already scraped, and/or duplicates (which we've seen before even in the same category)
         start_link_count = len(cat_links)
-        cat_links = list(set([x for x in cat_links if x not in ALREADY_SCRAPED]))
+        cat_links = list(set([x for x in cat_links if x not in already_scraped]))
         get_logger().info(f"{len(cat_links)} of {start_link_count} links in this category are new")
         get_logger().info("\n".join(sorted(cat_links)))
         if len(cat_links) > 0:

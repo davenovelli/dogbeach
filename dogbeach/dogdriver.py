@@ -14,7 +14,8 @@ class DogDriver:
 
     def __init__(self, logger=None, sleep=5, tries=10, backoff=.4, pageload_timeout=15):
         self.driver = self.init_driver()
-        self.driver.set_page_load_timeout(pageload_timeout)
+        self.pageload_timeout = pageload_timeout
+        self.set_pageload_timeout(pageload_timeout)
         self.sleep = sleep
         self.tries = tries
         self.backoff = 1 + backoff
@@ -23,7 +24,11 @@ class DogDriver:
         if self.logger is not None:
             self.logger.info("Initialized DogDriver with: sleep={}, tries={}, backoff={} and {} logger"
                              .format(sleep, tries, backoff, "no" if logger is None else "a"))
-
+    
+    def set_pageload_timeout(self, pageload_timeout):
+        self.pageload_timeout = pageload_timeout
+        self.driver.set_page_load_timeout(pageload_timeout)
+    
     @staticmethod
     def init_driver():
         """ Create a driver object based on default settings and set for this instance

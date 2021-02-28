@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import pytz
+import yaml
 import atexit
 import urllib
 import logging
@@ -26,26 +27,50 @@ _logger = None
 _engine = None
 _driver = None
 
+PUBLISHER = 'theinertia'
+
+##################################### Config
+with open("config.yml", "r") as ymlfile:
+    config = yaml.load(ymlfile, Loader=yaml.FullLoader)
+
+# Log level
+levels = {
+    'INFO': logging.INFO,
+    'DEBUG': logging.DEBUG,
+    'WARN': logging.WARN,
+    'ERROR': logging.ERROR
+}
+clevel_key = config[PUBLISHER]['log_clevel']
+CLEVEL = levels[clevel_key] if clevel_key in levels else levels['WARN']
+
 # What is the API endpoint
-# TODO: Update this to use environment variables
-REST_API_PROTOCOL = "http"
-REST_API_HOST = "localhost"
-REST_API_PORT = "8081"
+REST_API_PROTOCOL = config['common']['rest_api']['protocol']
+REST_API_HOST = config['common']['rest_api']['host']
+REST_API_PORT = config['common']['rest_api']['port']
 REST_API_URL = f"{REST_API_PROTOCOL}://{REST_API_HOST}:{REST_API_PORT}"
 CREATE_ENDPOINT = f"{REST_API_URL}/article"
-PUBLISHER_ARTICLES_ENDPOINT = f"{REST_API_URL}/articleUrlsByPublisher?publisher=theinertia"
+PUBLISHER_ARTICLES_ENDPOINT = f"{REST_API_URL}/articleUrlsByPublisher?publisher={PUBLISHER}"
 
 # UserID and BrowswerID are required fields for creating articles, this User is the ID tied to the system account
-SYSTEM_USER_ID = 5
-# TODO: Remove this - Browser ID is not a required field for the articles table
+SYSTEM_USER_ID = config['common']['system_user_id']
+
 # This is the "blank" UUID
-SCRAPER_BROWSER_ID = '00000000-0000-0000-0000-000000000000'
+SCRAPER_BROWSER_ID = config['common']['browser_id']
+
+# How long in between requests, in seconds
+SLEEP = config[PUBLISHER]['sleep'] if 'sleep' in config[PUBLISHER] else None
+
+# How many times should we attempt to load a page before going to next one?
+RETRIES = config[PUBLISHER]['retries'] if 'retries' in config[PUBLISHER] else None
+
+# How long to wait before giving up on a page load
+PAGELOAD_TIMEOUT = config[PUBLISHER]['page_load_timeout'] if 'page_load_timeout' in config[PUBLISHER] else None
+
+# How many articles should we load for each "page" from The Inertia's API?
+ARTICLES_PER_PAGE = config[PUBLISHER]['articles_per_page']
 
 # We want all times to be in westcoast time
 WESTCOAST = pytz.timezone('US/Pacific')
-
-# Track the list of article urls that have already been scraped
-ALREADY_SCRAPED = set()
 
 # The url for a specific page of a specific category
 SURFCAT_URL = 'https://www.theinertia.com/wp-content/themes/theinertia-2014/quick-ajax.php' \
@@ -62,10 +87,11 @@ CATEGORIES = {
     'women': 32700
 }
 
-# How many pages of articles that we've entirely scraped should we try before quitting?
-########################################### MAX_SCRAPED_PAGES_BEFORE_QUIT = 3
-MAX_SCRAPED_PAGES_BEFORE_QUIT = 3
+# How many pages of articles that we've already scraped fully should we try before quitting?
+MAX_EMPTY_PAGES = config[PUBLISHER]['max_empty_pages']
 
+# Track the list of article urls that have already been scraped
+already_scraped = set()
 
 def get_logger():
     """ Initialize and/or return existing logger object
@@ -74,8 +100,8 @@ def get_logger():
     """
     global _logger
     if _logger is None:
-        logfile = Path(os.path.dirname(os.path.realpath("__file__"))) / "log/theinertia_site.log"
-        _logger = doglog.setup_logger('theinertia_site', logfile, clevel=logging.DEBUG)
+        logfile = Path(os.path.dirname(os.path.realpath("__file__"))) / f"log/{PUBLISHER}_site.log"
+        _logger = doglog.setup_logger(f'{PUBLISHER}_site', logfile, clevel=CLEVEL)
     return _logger
 
 def get_driver():
@@ -86,6 +112,13 @@ def get_driver():
     global _driver
     if _driver is None:
         _driver = DogDriver(get_logger())
+        if SLEEP:
+            _driver.sleep = SLEEP
+        if RETRIES:
+            _driver.tries = RETRIES
+        if PAGELOAD_TIMEOUT:
+            _driver.set_pageload_timeout(PAGELOAD_TIMEOUT)
+    
     return _driver
 
 
@@ -94,12 +127,12 @@ def load_already_scraped_articles():
 
     :return: a list of urls of articles that have already been scraped
     """
-    global ALREADY_SCRAPED
+    global already_scraped
 
     r = requests.get(PUBLISHER_ARTICLES_ENDPOINT)
     urls_json = r.json()
-    ALREADY_SCRAPED = set([x['url'].rstrip('/').split("/")[-1] for x in urls_json])
-    get_logger().debug("Found {} articles already scraped".format(len(ALREADY_SCRAPED)))
+    already_scraped = set([x['url'].rstrip('/').split("/")[-1] for x in urls_json])
+    get_logger().debug("Found {} articles already scraped".format(len(already_scraped)))
 
 
 def find_unscraped_articles():
@@ -108,8 +141,6 @@ def find_unscraped_articles():
 
     Categories: Films (broken), Surf, Mountain (skip), Enviro, Health, Photo, Arts, Travel, Women
   """
-  ARTICLES_PER_PAGE = 12
-
   get_logger().debug("Starting scrape...")
   all_articles_list = []
   for cat, catnum in CATEGORIES.items():
@@ -131,14 +162,13 @@ def find_unscraped_articles():
           # build a list of all articles on this page that haven't been scraped yet
           page_articles = extract_article_list(cat, source)
           category_articles += page_articles
-          # extracted_count = extract_articles(cat, source)
           
-          # if we have any new articles on the page, add them. If this is the MAX_SCRAPED_PAGES_BEFORE_QUIT page
+          # if we have any new articles on the page, add them. If this is the MAX_EMPTY_PAGES page
           # in a row without a single unscraped article, then quit and start extracting the data from the generated
           # list
           if len(page_articles) == 0:
               empty_pages += 1
-              if empty_pages < MAX_SCRAPED_PAGES_BEFORE_QUIT:
+              if empty_pages < MAX_EMPTY_PAGES:
                   continue
               else:
                   get_logger().info("All articles on page {} have already been scraped, exiting...".format(int(pagenum)))
@@ -179,7 +209,7 @@ def extract_article_list(category, post_source):
   :param post_source: The html for an entire page of results
   :return: A list of article URLs scraped from the page, in the order they were scraped
   """
-  global ALREADY_SCRAPED
+  global already_scraped
 
   # Extract all the divs containing article cards. There are two possible html layouts
   soup = BeautifulSoup(post_source, "html.parser")
@@ -197,7 +227,7 @@ def extract_article_list(category, post_source):
   for article_div in article_divs:
     # print(article.prettify())
     url = article_div.find('a').get('href')[:-1]
-    if url.split("/")[-1] in ALREADY_SCRAPED:
+    if url.split("/")[-1] in already_scraped:
       continue
     img = article_div.find('img').get('src')
     if img is None:
@@ -400,14 +430,12 @@ def create_article(article):
     :param articles:
     :return:
     """
-    global ALREADY_SCRAPED
+    global already_scraped
 
-    ################################# FINISH UPDATING HERE
-    
     # Add some common fields
     article['userId'] = SYSTEM_USER_ID
     article['browserId'] = SCRAPER_BROWSER_ID
-    article['publisher'] = 'theinertia'
+    article['publisher'] = PUBLISHER
     get_logger().debug("Writing article to RDS...\n{}".format(article))
 
     header = { "Content-Type": "application/json" }

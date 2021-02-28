@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import yaml
 import pprint
 import logging
 import requests
@@ -15,48 +16,40 @@ from playwright.sync_api import sync_playwright, Error, TimeoutError
 from dogbeach import doglog
 _logger = None
 
-##################################### Constants
+##################################### Config
+with open("config.yml", "r") as ymlfile:
+    config = yaml.load(ymlfile, Loader=yaml.FullLoader)
 
 PUBLISHER = 'magicseaweed.com'
-
-BASE_URL = "https://magicseaweed.com"
+BASE_URL = config[PUBLISHER]['base_url']
 
 # What is the API endpoint
-# TODO: Update this to use environment variables
-REST_API_PROTOCOL = "http"
-REST_API_HOST = "localhost"
-REST_API_PORT = "8081"
+REST_API_PROTOCOL = config['common']['rest_api']['protocol']
+REST_API_HOST = config['common']['rest_api']['host']
+REST_API_PORT = config['common']['rest_api']['port']
 REST_API_URL = f"{REST_API_PROTOCOL}://{REST_API_HOST}:{REST_API_PORT}"
 CREATE_ENDPOINT = f"{REST_API_URL}/article"
 PUBLISHER_ARTICLES_ENDPOINT = f"{REST_API_URL}/articleUrlsByPublisher?publisher={PUBLISHER}"
 
 # UserID and BrowswerID are required fields for creating articles, this User is the ID tied to the system account
-SYSTEM_USER_ID = 5
+SYSTEM_USER_ID = config['common']['system_user_id']
 
 # This is the "blank" UUID
-SCRAPER_BROWSER_ID = '00000000-0000-0000-0000-000000000000'
+SCRAPER_BROWSER_ID = config['common']['browser_id']
 
 # Are we scraping full history, or only new articles?
-NEW_ONLY = True
+NEW_ONLY = config[PUBLISHER]['new_only']
 
 # Maximum number of empty pages to load before quitting
-MAX_EMPTY_PAGES = 3
+MAX_EMPTY_PAGES = config[PUBLISHER]['max_empty_pages']
 
 # User Agent to use for the requests
-AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.150 Safari/537.36'
+AGENT = config['common']['agent']
+
+##################################### Globals
 
 # A list of all the articles that have been scraped already, so we don't duplicate our efforts
-ALREADY_SCRAPED = set()
-
-##################################### Config
-
-# import configparser
-# config = configparser.ConfigParser()
-# configParser = config.read('config.py')
-
-# new_only = eval(config['DEFAULT']['new_only'])
-
-# printAndLog(f"new_only: {new_only}")
+already_scraped = set()
 
 ##################################### Logging
 
@@ -113,14 +106,14 @@ def load_already_scraped_articles():
 
     :return: a list of urls of articles that have already been scraped
     """
-    global ALREADY_SCRAPED
+    global already_scraped
 
     r = requests.get(PUBLISHER_ARTICLES_ENDPOINT)
     urls_json = r.json()
 
-    ALREADY_SCRAPED = set([x['url'] for x in urls_json])
+    already_scraped = set([x['url'] for x in urls_json])
 
-    get_logger().debug("Found {} articles already scraped".format(len(ALREADY_SCRAPED)))
+    get_logger().debug("Found {} articles already scraped".format(len(already_scraped)))
 
 
 ################################################################################ Scraping
@@ -132,8 +125,6 @@ def create_article(article):
     :param articles:
     :return:
     """
-    global ALREADY_SCRAPED
-    
     # Add some common fields
     article['userId'] = SYSTEM_USER_ID
     article['browserId'] = SCRAPER_BROWSER_ID
@@ -239,7 +230,7 @@ def scrape():
             loadmore_group = page.query_selector(".msw-js-loadmore-group")
             loadmore_links = loadmore_group.query_selector_all("a.editorial-item, a.msw-js-live-content")
             urls = [f'{BASE_URL}{a.get_attribute("href")}' for a in loadmore_links if "http://" not in a.get_attribute("href") and "www." not in a.get_attribute("href")]
-            urls = [url for url in urls if url not in ALREADY_SCRAPED]
+            urls = [url for url in urls if url not in already_scraped]
             if len(urls) > 1:
                 url_list = "\n".join(urls)
                 print(f"{len(urls)} new URLs to scrape:\n{url_list}")

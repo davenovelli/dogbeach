@@ -17,6 +17,7 @@ import re
 import sys
 import json
 import pytz
+import yaml
 import atexit
 import logging
 import requests
@@ -39,35 +40,48 @@ _driver = None
 # What is the identifier for this scraper?
 PUBLISHER = 'surfer.com'
 
-# How long in between requests, in seconds
-SLEEP = 5
+##################################### Config
+with open("config.yml", "r") as ymlfile:
+    config = yaml.load(ymlfile, Loader=yaml.FullLoader)
+
+# Log level
+levels = {
+    'INFO': logging.INFO,
+    'DEBUG': logging.DEBUG,
+    'WARN': logging.WARN,
+    'ERROR': logging.ERROR
+}
+clevel_key = config[PUBLISHER]['log_clevel'] if 'log_clevel' in config[PUBLISHER] else 'WARN'
+CLEVEL = levels[clevel_key] if clevel_key in levels else levels['WARN']
 
 # What is the API endpoint
-# TODO: Update this to use environment variables
-REST_API_PROTOCOL = "http"
-REST_API_HOST = "localhost"
-REST_API_PORT = "8081"
+REST_API_PROTOCOL = config['common']['rest_api']['protocol']
+REST_API_HOST = config['common']['rest_api']['host']
+REST_API_PORT = config['common']['rest_api']['port']
 REST_API_URL = f"{REST_API_PROTOCOL}://{REST_API_HOST}:{REST_API_PORT}"
 CREATE_ENDPOINT = f"{REST_API_URL}/article"
 PUBLISHER_ARTICLES_ENDPOINT = f"{REST_API_URL}/articleUrlsByPublisher?publisher={PUBLISHER}"
 
 # UserID and BrowswerID are required fields for creating articles, this User is the ID tied to the system account
-SYSTEM_USER_ID = 5
-# TODO: Remove this - Browser ID is not a required field for the articles table
+SYSTEM_USER_ID = config['common']['system_user_id']
+
 # This is the "blank" UUID
-SCRAPER_BROWSER_ID = '00000000-0000-0000-0000-000000000000'
+SCRAPER_BROWSER_ID = config['common']['browser_id']
 
-# We want all times to be in westcoast time
-WESTCOAST = pytz.timezone('US/Pacific')
+# How long in between requests, in seconds
+SLEEP = config[PUBLISHER]['sleep'] if 'sleep' in config[PUBLISHER] else None
 
-# Track the list of article urls that have already been scraped
-ALREADY_SCRAPED = set()
+# How many times should we attempt to load a page before going to next one?
+RETRIES = config[PUBLISHER]['retries'] if 'retries' in config[PUBLISHER] else None
+
+# How long to wait before giving up on a page load
+PAGELOAD_TIMEOUT = config[PUBLISHER]['page_load_timeout'] if 'page_load_timeout' in config[PUBLISHER] else None
 
 # Mode: full or new-only
-MODE_FULL = False
+MODE_FULL = config[PUBLISHER]['mode_full']
 
 # Article count (how many to retrieve with each API call)
-COUNT = 20
+COUNT = config[PUBLISHER]['articles_per_page']
 
 # How many pages of articles that we've entirely scraped should we try before quitting?
 MAX_SCRAPED_PAGES_BEFORE_QUIT = int(50 / COUNT) + 1
@@ -81,6 +95,11 @@ SURFCAT_URL = 'https://www.surfer.com/wp-json/ami/v1/lazy-load' \
   '&count={}'\
   '&sort={{"date": "{}"}}'
 
+# We want all times to be in westcoast time
+WESTCOAST = pytz.timezone('US/Pacific')
+
+# Track the list of article urls that have already been scraped
+already_scraped = set()
 
 def get_logger():
     """ Initialize and/or return existing logger object
@@ -90,7 +109,7 @@ def get_logger():
     global _logger
     if _logger is None:
         logfile = Path(os.path.dirname(os.path.realpath("__file__"))) / f"log/{PUBLISHER}_site.log"
-        _logger = doglog.setup_logger(f'{PUBLISHER}_site', logfile, clevel=logging.DEBUG)
+        _logger = doglog.setup_logger(f'{PUBLISHER}_site', logfile, clevel=CLEVEL)
     return _logger
 
 
@@ -101,7 +120,14 @@ def get_driver():
     """
     global _driver
     if _driver is None:
-        _driver = DogDriver(get_logger(), sleep=SLEEP)
+        _driver = DogDriver(get_logger())
+        if SLEEP:
+            _driver.sleep = SLEEP
+        if RETRIES:
+            _driver.tries = RETRIES
+        if PAGELOAD_TIMEOUT:
+            _driver.set_pageload_timeout(PAGELOAD_TIMEOUT)
+    
     return _driver
 
 
@@ -110,19 +136,19 @@ def load_already_scraped_articles():
 
     :return: a list of urls of articles that have already been scraped
     """
-    global ALREADY_SCRAPED
+    global already_scraped
 
     r = requests.get(PUBLISHER_ARTICLES_ENDPOINT)
     urls_json = r.json()
-    ALREADY_SCRAPED = set([x['url'] for x in urls_json])
+    already_scraped = set([x['url'] for x in urls_json])
 
     with open(f'data/{PUBLISHER}/skips.txt', 'r') as skips_file:
       SKIPS = list(map(str.strip, skips_file.readlines()))
       # print(SKIPS)
     
-    ALREADY_SCRAPED.update(SKIPS)
+    already_scraped.update(SKIPS)
 
-    get_logger().debug("Found {} articles already scraped".format(len(ALREADY_SCRAPED)))
+    get_logger().debug("Found {} articles already scraped".format(len(already_scraped)))
     
 
 def get_page_source(endpoint):
@@ -245,7 +271,7 @@ def extract_article_list(post_source):
   :param post_source: The html for an entire page of results
   :return: A list of dictionaries of article data scraped from the page, in the order they were scraped
   """
-  global ALREADY_SCRAPED
+  global already_scraped
 
   articles = []
   
@@ -261,7 +287,7 @@ def extract_article_list(post_source):
   # From each article div, extract the partial content (url, thumbnail, category) from the card
   for article_element in article_elements:
     url = article_element.find('a').get('href')[:-1]
-    if url in ALREADY_SCRAPED:
+    if url in already_scraped:
       continue
 
     if '30-days-giveaways' in url:
@@ -388,7 +414,7 @@ def create_article(article):
     :param articles:
     :return:
     """
-    global ALREADY_SCRAPED
+    global already_scraped
     
     # Add some common fields
     article['userId'] = SYSTEM_USER_ID
@@ -444,7 +470,7 @@ def scrape():
 
         # If there are any new articles on this page, extract all their contents and push to the database
         article_urls_string = "\n".join([x['url'] for x in page_articles])
-        print(f"Found {len(page_articles)} articles to scrape:\n{ article_urls_string }\n")
+        print(f"Found {len(page_articles)} articles to scrape on page {pagenum}:\n{ article_urls_string }\n")
         if len(page_articles) > 0:
             # Scrape each of these pages and load them into the database
             extract_articles(page_articles)

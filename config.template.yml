@@ -1,0 +1,31 @@
+common:
+    rest_api:
+        protocol: "http"
+        host: "localhost"
+        port: "8081"
+    system_user_id: -1
+    browser_id: '00000000-0000-0000-0000-000000000000'
+    agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.150 Safari/537.36'
+magicseaweed.com:
+    base_url: "https://magicseaweed.com"
+    new_only: True
+    max_empty_pages: 3
+stabmag:
+    max_empty_pages: 4
+    sleep: 3
+surfd.com:
+    sleep: 5
+    retries: 5
+    page_load_timeout: 15
+    log_clevel: DEBUG
+surfer.com:
+    sleep: 5
+    mode_full: False
+    articles_per_page: 20
+theinertia:
+    articles_per_page: 12
+    max_empty_pages: 3
+    sleep: 3
+    retries: 5
+    page_load_timeout: 10
+    log_clevel: DEBUG
