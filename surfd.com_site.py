@@ -25,6 +25,7 @@ _driver = None
 PUBLISHER = 'surfd.com'
 
 ##################################### Config
+os.chdir(os.path.dirname(sys.argv[0]))
 with open("config.yml", "r") as ymlfile:
     config = yaml.load(ymlfile, Loader=yaml.FullLoader)
 

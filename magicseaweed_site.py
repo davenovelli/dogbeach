@@ -17,6 +17,7 @@ from dogbeach import doglog
 _logger = None
 
 ##################################### Config
+os.chdir(os.path.dirname(sys.argv[0]))
 with open("config.yml", "r") as ymlfile:
     config = yaml.load(ymlfile, Loader=yaml.FullLoader)
 
@@ -184,7 +185,7 @@ def scrape():
     """ Main function driving the scraping process
     """
     with sync_playwright() as p:
-        get_logger().info(f"Start time: {strftime('%H:%M:%S')}\n", flush=True)
+        get_logger().info(f"Start time: {strftime('%H:%M:%S')}\n")
         
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(user_agent=AGENT)
@@ -228,7 +229,7 @@ def scrape():
                 create_article(article)
                 sleep(3)
 
-        get_logger().info(f"End Time: {strftime('%H:%M:%S')}\n", flush=True)        
+        get_logger().info(f"End Time: {strftime('%H:%M:%S')}\n")
         browser.close()
 
 
