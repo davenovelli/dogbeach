@@ -52,26 +52,6 @@ AGENT = config['common']['agent']
 already_scraped = set()
 
 ##################################### Logging
-
-def make_sure_path_exists(path: str):
-    try:
-        os.makedirs(path)
-    except OSError as exception:
-        from errno import EEXIST
-        if exception.errno != EEXIST:
-            raise
-
-OutputFolder = 'Output'
-make_sure_path_exists(OutputFolder)
-
-log = open('%s/log_%s.txt' % (OutputFolder, strftime("%Y_%b%d_%H%M_%S")),'w') 
-
-def printAndLog(text):
-    if not isinstance(text, str):
-        text = str(text)
-    print(text, flush=True)
-    log.write("%s\n" % (text))
-
 def get_logger():
     """ Initialize and/or return existing logger object
 
@@ -93,12 +73,9 @@ def str_list(L: list) -> str:
     return l
 
 def abort_or_continue(route, request):
-    # print(request.resource_type) # document, stylesheet, image, media, font, script, texttrack, xhr, fetch, eventsource, websocket, manifest, other
-
     if request.resource_type in ['document']:
         route.continue_()
     else:
-        # print(request.resource_type)
         route.abort()
 
 def load_already_scraped_articles():
@@ -134,7 +111,7 @@ def create_article(article):
     header = { "Content-Type": "application/json" }
     json_data = json.dumps(article, default=str)
     r = requests.post(CREATE_ENDPOINT, headers=header, data=json_data)
-    print("\n\n=================================================================================\n\n")
+    get_logger().debug("\n\n=================================================================================\n\n")
     
     try:
       r.raise_for_status()
@@ -144,7 +121,7 @@ def create_article(article):
 
 @retry(Error, tries=6, delay=3, backoff=1.4, max_delay=30)
 def extract_article(page, url):
-    printAndLog(url)
+    get_logger().info(url)
     
     global status
     def set_status(status_code):
@@ -175,7 +152,7 @@ def extract_article(page, url):
         soup = BeautifulSoup(html, "lxml")
         [s.extract() for s in soup('small')]
         content = ". ".join([p.get_text(strip=True) for p in soup.select("p") if len(p.get_text(strip=True)) > 0]).replace('..', '.') # or "\n".join(...)
-        # print(content)
+        # get_logger().info(content)
 
         article_video = [v.find("iframe")["src"] for v in soup.select(".video") if v.find("iframe") is not None] # ["//www.youtube.com/embed/yCICYEGXdVg"]
         article_video = [v if "/" not in v[0] else f"https:{v}" for v in article_video] # ["https://www.youtube.com/embed/yCICYEGXdVg"]
@@ -196,10 +173,10 @@ def extract_article(page, url):
             'author_url': author_url,
             'text_content': content,
         }
-        printAndLog(pprint.pformat(article_json, sort_dicts=False, width=200))
+        get_logger().debug(pprint.pformat(article_json, sort_dicts=False, width=200))
         return article_json
     else:
-        printAndLog(f"Error status: {status}")
+        get_logger().error(f"Error: {status} status retrieving page")
         return None
 
 
@@ -207,7 +184,7 @@ def scrape():
     """ Main function driving the scraping process
     """
     with sync_playwright() as p:
-        print(f"Start time: {strftime('%H:%M:%S')}\n", flush=True)
+        get_logger().info(f"Start time: {strftime('%H:%M:%S')}\n", flush=True)
         
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(user_agent=AGENT)
@@ -221,7 +198,7 @@ def scrape():
         
         empty_page_count = 0
         for page_n in range(1, LastPageNum + 1):
-            printAndLog(f"\npage: {page_n} of {LastPageNum}\n")
+            get_logger().info(f"\npage: {page_n} of {LastPageNum}\n")
 
             if page_n > 1:
                 page_url = f"https://magicseaweed.com/news/features/?page={page_n}"
@@ -233,13 +210,13 @@ def scrape():
             urls = [url for url in urls if url not in already_scraped]
             if len(urls) > 1:
                 url_list = "\n".join(urls)
-                print(f"{len(urls)} new URLs to scrape:\n{url_list}")
+                get_logger().info(f"{len(urls)} new URLs to scrape:\n{url_list}")
                 empty_page_count = 0
             else:
                 empty_page_count += 1
 
                 if empty_page_count == MAX_EMPTY_PAGES and NEW_ONLY:
-                    print("Max number of empty pages reached, quitting...")
+                    get_logger().info("Max number of empty pages reached, quitting...")
                     break
                 else:
                     continue
@@ -251,7 +228,7 @@ def scrape():
                 create_article(article)
                 sleep(3)
 
-        print(f"End Time: {strftime('%H:%M:%S')}\n", flush=True)        
+        get_logger().info(f"End Time: {strftime('%H:%M:%S')}\n", flush=True)        
         browser.close()
 
 
@@ -262,4 +239,4 @@ if __name__ == '__main__':
     # Extract and save any new articles
     scrape()
 
-    print("\nDone.")
+    get_logger().info("\nDone.")

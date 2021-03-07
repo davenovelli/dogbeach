@@ -184,7 +184,7 @@ def extract_link_data(link):
     get_driver().get_url(link)
     sleep(4)
 
-    print("getting page source from driver")
+    get_logger().debug("getting page source from driver")
     source = get_driver().clean_unicode(get_driver().driver.page_source)
     sleep(1)
 
@@ -247,7 +247,7 @@ def create_article(article):
     article['userId'] = SYSTEM_USER_ID
     article['browserId'] = SCRAPER_BROWSER_ID
     article['publisher'] = PUBLISHER
-    get_logger().debug("Writing article to RDS...\n{}".format(article))
+    get_logger().info(f"Writing article to RDS...\n{article}")
 
     header = { "Content-Type": "application/json" }
     json_data = json.dumps(article, default=str)
@@ -267,10 +267,10 @@ def extract_new_links():
     """
     all_links = []
 
-    print("Loop through all categories...")
+    get_logger().debug("Loop through all categories...")
     for category in sorted(list(CATEGORIES)):
-        get_logger().info(f"\nExtracting category: {category}")
-        get_logger().info(f"-------------------")
+        get_logger().debug(f"\nExtracting category: {category}")
+        get_logger().debug(f"-------------------")
 
         get_driver().get_url(CAT_URL_TEMPLATE.format(category))
 
@@ -297,7 +297,7 @@ def extract_new_links():
                 except:
                     pass
             except:
-                print ("Button Load More not found")
+                get_logger().debug("Button Load More not found")
                 break
 
         # Get all links
@@ -327,14 +327,11 @@ def scrape():
 
     So, there is no "Full" vs. "Update" mode - the site is so small it doesn't warrant it
     """
-    print("looping through all new links...")
     new_links = extract_new_links()
-    print(f"There are {len(new_links)} new links to scrape...")
+    get_logger().info(f"There are {len(new_links)} new links to scrape...")
     for link in new_links:
-        print(f"\nprocessing link: {link}")
-
+        get_logger().info(f"\nprocessing link: {link}")
         article_dict = extract_link_data(link)
-        
         create_article(article_dict)
 
 
@@ -353,4 +350,4 @@ if __name__ == '__main__':
     # Extract and save any new articles
     scrape()
 
-    print("\nDone.")
+    get_logger().info("\nDone.")

@@ -171,7 +171,7 @@ def scrape_article(article):
 
     if not get_driver('article').get_url(url):
         # We'll just have to skip this slug, can't load it even with retries
-        print("failed to get url: {}".format(url))
+        get_logger().warning(f"failed to get url: {url}")
         return None
 
     source = get_driver('article').clean_unicode(get_driver('article').driver.page_source)
@@ -238,10 +238,10 @@ def extract_articles(posts):
         # print(article_div.prettify())
         url = SITE + article_div.find('a', class_='feed-hero').get('href').rstrip('/')
         if url.split('/')[-1] in already_scraped:
-            print("already scraped {}, skipping...".format(url))
+            get_logger().info("already scraped {}, skipping...".format(url))
             continue
         else:
-            print("new article found: {}".format(url))
+            get_logger().info("new article found: {}".format(url))
             # Just in case there are duplicates
             already_scraped.add(url.split('/')[-1])
 
@@ -253,10 +253,9 @@ def extract_articles(posts):
 
         if article_json is not None:
             articles += [article_json]
-            # print(json.dumps(article_json))
             # get_logger().debug("extracted article: {}".format(json.dumps(article_json)))
         else:
-            print("Couldn't scrape {}".format(url))
+            get_logger().warn("Couldn't scrape {}".format(url))
 
     return articles
 
@@ -268,7 +267,7 @@ def create_articles(articles):
     :return:
     """
     for article in articles:
-      print(f"creating article: {article['url']}")
+      get_logger().info(f"creating article: {article['url']}")
 
       # Add some common fields
       article['userId'] = SYSTEM_USER_ID

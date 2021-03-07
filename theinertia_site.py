@@ -322,8 +322,8 @@ def scrape_article(article):
 
     # Article Content
     article = get_article_content(article_soup, article)
+    get_logger().debug(article)
 
-    print(article)
     return article
 
 def get_article_content(soup, article):
@@ -441,7 +441,7 @@ def create_article(article):
     header = { "Content-Type": "application/json" }
     json_data = json.dumps(article, default=str)
     r = requests.post(CREATE_ENDPOINT, headers=header, data=json_data)
-    print("\n\n=================================================================================\n\n")
+    get_logger().info("\n\n=================================================================================\n\n")
     
     try:
       r.raise_for_status()
