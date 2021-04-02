@@ -10,6 +10,11 @@ magicseaweed.com:
     base_url: "https://magicseaweed.com"
     new_only: True
     max_empty_pages: 3
+surfline.com:
+    base_url: "https://www.surfline.com/"
+    new_only: True
+    max_empty_pages: 3
+    limit: 6
 stabmag:
     max_empty_pages: 4
     sleep: 3
