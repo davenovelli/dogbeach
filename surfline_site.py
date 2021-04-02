@@ -17,13 +17,17 @@ from dogbeach import doglog
 _logger = None
 
 ##################################### Config
-os.chdir(os.path.dirname(sys.argv[0]))
+
 with open("config.yml", "r") as ymlfile:
     config = yaml.load(ymlfile, Loader=yaml.FullLoader)
 
 PUBLISHER = 'surfline.com'
 BASE_URL = config[PUBLISHER]['base_url']
 LIMIT = config[PUBLISHER]['limit']
+PRODUCTION = config[PUBLISHER]['production']
+
+if PRODUCTION:
+    os.chdir(os.path.dirname(sys.argv[0]))
 
 # What is the API endpoint
 REST_API_PROTOCOL = config['common']['rest_api']['protocol']
@@ -177,10 +181,11 @@ def scrape():
 
     offset = 0
 
-    r = requests.get(f'https://www.surfline.com/wp-json/sl/v1/taxonomy/posts/category?limit={LIMIT}&offset={offset}', timeout=None) # timeout=None # for slowest sites, most stable
-    data = r.json()
-
     while(1):
+
+        r = requests.get(f'https://www.surfline.com/wp-json/sl/v1/taxonomy/posts/category?limit={LIMIT}&offset={offset}', timeout=None) # timeout=None # for slowest sites, most stable
+        data = r.json()
+
         if data != None:
             posts = data["posts"]
 
@@ -197,18 +202,20 @@ def scrape():
                             break
                         elif category == categories[-1]:
                             article = extract_article(post, categories)
-                            if article is None:
-                                continue
-                            create_article(article)
-                            sleep(3)
+                            if PRODUCTION:
+                                if article is None:
+                                    continue
+                                create_article(article)
+                                sleep(3)
         else:
             return
         offset += LIMIT
         print(f"\noffset: {offset}\n", flush=True)
 
 if __name__ == '__main__':
-    # Query all the urls already scraped for this publisher
-    load_already_scraped_articles()
+    if PRODUCTION:
+        # Query all the urls already scraped for this publisher
+        load_already_scraped_articles()
 
     # Extract and save any new articles
     scrape()
