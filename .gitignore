@@ -3,6 +3,8 @@
 crontest.py
 util/__pycache*
 *.pyc
+*.csv
+*.db
 dogbeach/__pycache__
 .ipynb_checkpoints
 .vscode

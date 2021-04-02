@@ -124,9 +124,72 @@ def create_article(article):
     except Exception as ex:
         get_logger().error(f"There was a {type(ex)} error while creating article {article['url']}:...\n{r.json()}")
 
+#####################################
+
+import sqlite3
+
+timeout = 90.0 # sql
+
+default_cache_size = cache_size = 4000 # 2000,4000,20000,40000
+PAGE_SIZE = 4096
+
+OutputFolder = "log"
+db = "%s/%s.db" % (OutputFolder, PUBLISHER) # static
+
+con = sqlite3.connect(db, timeout=timeout, check_same_thread=False)
+con.text_factory = str
+
+con.execute("PRAGMA synchronous = OFF;")
+con.execute("PRAGMA journal_mode = OFF;")
+con.execute("PRAGMA locking_mode = NORMAL;") # NORMAL / EXCLUSIVE
+con.execute("PRAGMA temp_store = MEMORY;")
+con.execute("PRAGMA count_changes = OFF;")
+con.execute("PRAGMA PAGE_SIZE = %d;" % PAGE_SIZE)
+con.execute("PRAGMA default_cache_size=%d;" % default_cache_size)
+con.execute("PRAGMA cache_size=%d;" % cache_size)
+
+con.execute("PRAGMA threads = 10;") # 1,2,10
+con.execute("PRAGMA compile_options;")
+
+cursor = con.cursor()
+
+SQL_Str = """CREATE TABLE IF NOT EXISTS series_categories
+                    (
+                    "series" TEXT,
+                    "categories" TEXT,
+                    PRIMARY KEY("series","categories")
+                    )
+"""
+cursor.execute(SQL_Str)
+
+################################################################################
+
+def DbToCsv(dbFileNamePath: str):
+    import csv
+
+    conn=sqlite3.connect(dbFileNamePath)
+    c=conn.cursor()
+
+    FileNameOut = 'log/series_categories.csv'
+
+    with open(FileNameOut, 'w', newline="") as f:
+        header = ["series","categories"]
+
+        writer = csv.writer(f,delimiter=',')
+        writer.writerow(header)
+
+        data = c.execute(f"SELECT * FROM series_categories ORDER BY series ASC;") # all fields
+
+        writer.writerows(data)
+
+def SeriesCategories(series,categories):
+    output = [str(series),str(categories)]
+    print(output, flush=True)
+    cursor.execute(u"INSERT OR REPLACE INTO series_categories VALUES (" + (len(output)-1) * "?," + "?)", output)
+    con.commit()
 
 @retry(Error, tries=6, delay=3, backoff=1.4, max_delay=30)
-def extract_article(post, categories):
+def extract_article(post):
     article_id = post["id"]
     permalink = post["permalink"]
 
@@ -144,14 +207,22 @@ def extract_article(post, categories):
         else:
             thumbnail = ""
 
-        author_name = soup.select("div.sl-editorial-author__details__name")[0].get_text() # Surfline
+        if soup.select("div.sl-editorial-author__details__name"):
+            author_name = soup.select("div.sl-editorial-author__details__name")[0].get_text() # Surfline
+        else:
+            author_name = ""
 
         article_video = [v.find("iframe")["src"] for v in soup.select(".video-wrap") if v.find("iframe") is not None] # ["https://www.youtube.com/embed/nF2y6MjpOQ4?feature=oembed"]
 
         content = ". ".join([p.get_text(strip=True) for p in soup.select("p.p1") if len(p.get_text(strip=True)) > 0]).replace('..', '.') # or "\n".join(...)
 
+        categories = [c["name"] for c in post["categories"]]
         series = [s["name"] for s in post["series"]]
-        atags = [a["href"].split("/")[-1] for a in soup.select("ul.sl-article-tags")[0].select("a")]
+
+        if soup.select("ul.sl-article-tags"):
+            atags = [a["href"].split("/")[-1] for a in soup.select("ul.sl-article-tags")[0].select("a")]
+        else:
+            atags = []
 
         tags = categories + series + atags
         tags = [t.lower() for t in tags]
@@ -179,7 +250,7 @@ def scrape():
     """ Main function driving the scraping process
     """
 
-    offset = 0
+    offset = config[PUBLISHER]['offset']
 
     while(1):
 
@@ -194,6 +265,7 @@ def scrape():
 
                 premium = post["premium"]
                 categories = [c["name"] for c in post["categories"]]
+                series = [s["name"] for s in post["series"]]
                 category = categories[0] # 1st category
 
                 if premium != True:
@@ -201,7 +273,8 @@ def scrape():
                         if category in ["Español","Português","Premium"]:
                             break
                         elif category == categories[-1]:
-                            article = extract_article(post, categories)
+                            # SeriesCategories(series,categories)
+                            article = extract_article(post)
                             if PRODUCTION:
                                 if article is None:
                                     continue
@@ -218,6 +291,8 @@ if __name__ == '__main__':
         load_already_scraped_articles()
 
     # Extract and save any new articles
-    scrape()
-
-    get_logger().info("\nDone.")
+    try:
+        scrape()
+    finally:
+        # DbToCsv(db)
+        get_logger().info("\nDone.")
