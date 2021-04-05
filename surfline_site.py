@@ -5,6 +5,7 @@ import yaml
 import pprint
 import logging
 import requests
+import pandas as pd
 
 from retry import retry
 from pathlib import Path
@@ -77,12 +78,6 @@ def str_list(L: list) -> str:
     else:
         l = []
     return l
-
-# def abort_or_continue(route, request):
-#     if request.resource_type in ['document']:
-#         route.continue_()
-#     else:
-#         route.abort()
 
 def load_already_scraped_articles():
     """ Query the database for all articles that have already been scraped
@@ -252,6 +247,9 @@ def scrape():
 
     offset = config[PUBLISHER]['offset']
 
+    df = pd.read_csv(f"data/{PUBLISHER}/alltags_ordered.csv", header=None)
+    cats = [row[0] for index,row in df.iterrows()]
+
     while(1):
 
         r = requests.get(f'https://www.surfline.com/wp-json/sl/v1/taxonomy/posts/category?limit={LIMIT}&offset={offset}', timeout=None) # timeout=None # for slowest sites, most stable
@@ -266,13 +264,22 @@ def scrape():
                 premium = post["premium"]
                 categories = [c["name"] for c in post["categories"]]
                 series = [s["name"] for s in post["series"]]
-                category = categories[0] # 1st category
+
+                category = None
+                for cat in categories:
+                    if cat in cats:
+                        category = cat
+                        # print(f"\ncategory {category} found at ranking\n", flush=True) # tmp
+                        break
+
+                if category == None:
+                    category = categories[0] # 1st category
 
                 if premium != True:
-                    for category in categories:
-                        if category in ["Español","Português","Premium"]:
+                    for cat in categories:
+                        if cat in ["Español","Português","Premium"]:
                             break
-                        elif category == categories[-1]:
+                        elif cat == categories[-1]:
                             # SeriesCategories(series,categories)
                             article = extract_article(post)
                             if PRODUCTION:
