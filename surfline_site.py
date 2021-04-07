@@ -219,12 +219,11 @@ def extract_article(post):
         else:
             atags = []
 
-        tags = categories + series + atags
-        tags = [t.lower() for t in tags]
-        tags = list(dict.fromkeys(tags)) # remove duplicates
-
+        tags = [t.lower() for t in categories + series + atags]
+        tags = str_list(sorted(list(set(tags))))
+        
         article_json = {
-            'permalink': permalink,
+            'url': permalink,
             'createdAt': post["createdAt"],
             'category': categories[0],
             'tags': tags,
@@ -238,7 +237,7 @@ def extract_article(post):
         get_logger().debug(pprint.pformat(article_json, sort_dicts=False, width=200))
         return article_json
     else:
-        get_logger().error(f"Error: {status} status retrieving page")
+        get_logger().error(f"Error: {status_code} status retrieving page")
         return None
 
 def scrape():
@@ -286,7 +285,7 @@ def scrape():
                                 if article is None:
                                     continue
                                 create_article(article)
-                                sleep(3)
+                            sleep(3)
         else:
             return
         offset += LIMIT
