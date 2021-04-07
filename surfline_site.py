@@ -209,7 +209,9 @@ def extract_article(post):
 
         article_video = [v.find("iframe")["src"] for v in soup.select(".video-wrap") if v.find("iframe") is not None] # ["https://www.youtube.com/embed/nF2y6MjpOQ4?feature=oembed"]
 
-        content = ". ".join([p.get_text(strip=True) for p in soup.select("p.p1") if len(p.get_text(strip=True)) > 0]).replace('..', '.') # or "\n".join(...)
+        content = ". ".join([p.get_text(strip=True) for p in soup.select("div#sl-editorial-article-body")[0].select("p.p1") if len(p.get_text(strip=True)) > 0]).replace('..', '.') # or "\n".join(...)
+        if not len(content):
+            content = ". ".join([p.get_text(strip=True) for p in soup.select("div#sl-editorial-article-body")[0].select("p") if len(p.get_text(strip=True)) > 0]).replace('..', '.')
 
         categories = [c["name"] for c in post["categories"]]
         series = [s["name"] for s in post["series"]]
@@ -285,7 +287,7 @@ def scrape():
                                 if article is None:
                                     continue
                                 create_article(article)
-                            sleep(3)
+                                sleep(3)
         else:
             return
         offset += LIMIT
