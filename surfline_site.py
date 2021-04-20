@@ -203,7 +203,7 @@ def extract_article(post):
         soup = BeautifulSoup(r.text, "lxml")
 
         if post["media"]["type"] == "image":
-            thumbnail = post["media"]["feed1x"]
+            thumbnail = post["media"]["feed1x"].replace('https://', '')
         else:
             thumbnail = ""
 
