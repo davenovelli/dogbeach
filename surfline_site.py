@@ -26,10 +26,6 @@ with open("config.yml", "r") as ymlfile:
 PUBLISHER = 'surfline.com'
 BASE_URL = config[PUBLISHER]['base_url']
 LIMIT = config[PUBLISHER]['limit']
-PRODUCTION = config[PUBLISHER]['production']
-
-if PRODUCTION:
-    os.chdir(os.path.dirname(sys.argv[0]))
 
 # What is the API endpoint
 REST_API_PROTOCOL = config['common']['rest_api']['protocol']
@@ -45,14 +41,8 @@ SYSTEM_USER_ID = config['common']['system_user_id']
 # This is the "blank" UUID
 SCRAPER_BROWSER_ID = config['common']['browser_id']
 
-# Are we scraping full history, or only new articles?
-NEW_ONLY = config[PUBLISHER]['new_only']
-
 # Maximum number of empty pages to load before quitting
 MAX_EMPTY_PAGES = config[PUBLISHER]['max_empty_pages']
-
-# User Agent to use for the requests
-AGENT = config['common']['agent']
 
 ##################################### Globals
 
@@ -129,62 +119,6 @@ def create_article(article):
         get_logger().error(f"There was a {type(ex)} error while creating article {article['url']}:...\n{r.json()}")
 
     get_logger().debug("\n\n=================================================================================\n\n")
-
-#####################################
-
-import sqlite3
-
-timeout = 90.0 # sql
-
-default_cache_size = cache_size = 4000 # 2000,4000,20000,40000
-PAGE_SIZE = 4096
-
-OutputFolder = "log"
-db = "%s/%s.db" % (OutputFolder, PUBLISHER) # static
-
-con = sqlite3.connect(db, timeout=timeout, check_same_thread=False)
-con.text_factory = str
-
-con.execute("PRAGMA synchronous = OFF;")
-con.execute("PRAGMA journal_mode = OFF;")
-con.execute("PRAGMA locking_mode = NORMAL;") # NORMAL / EXCLUSIVE
-con.execute("PRAGMA temp_store = MEMORY;")
-con.execute("PRAGMA count_changes = OFF;")
-con.execute("PRAGMA PAGE_SIZE = %d;" % PAGE_SIZE)
-con.execute("PRAGMA default_cache_size=%d;" % default_cache_size)
-con.execute("PRAGMA cache_size=%d;" % cache_size)
-
-con.execute("PRAGMA threads = 10;") # 1,2,10
-con.execute("PRAGMA compile_options;")
-
-cursor = con.cursor()
-
-SQL_Str = """CREATE TABLE IF NOT EXISTS series_categories
-                    (
-                    "series" TEXT,
-                    "categories" TEXT,
-                    PRIMARY KEY("series","categories")
-                    )
-"""
-cursor.execute(SQL_Str)
-
-def DbToCsv(dbFileNamePath: str):
-    import csv
-
-    conn=sqlite3.connect(dbFileNamePath)
-    c=conn.cursor()
-
-    FileNameOut = 'log/series_categories.csv'
-
-    with open(FileNameOut, 'w', newline="") as f:
-        header = ["series","categories"]
-
-        writer = csv.writer(f,delimiter=',')
-        writer.writerow(header)
-
-        data = c.execute(f"SELECT * FROM series_categories ORDER BY series ASC;") # all fields
-
-        writer.writerows(data)
 
 ################################################################################
 
@@ -310,11 +244,11 @@ def scrape():
                 # If the article is premium or not in English then skip it
                 if premium == False and len(tags.intersection({"Español", "Português", "Premium"})) == 0:
                     article = extract_article(post)
-                    if PRODUCTION:
-                        if article is None:
-                            continue
-                        create_article(article)
-                        new_articles_found += 1
+                    if article is None:
+                        continue
+
+                    create_article(article)
+                    new_articles_found += 1
         else:
             return
         
@@ -331,9 +265,8 @@ def scrape():
         offset += LIMIT
 
 if __name__ == '__main__':
-    if PRODUCTION:
-        # Query all the urls already scraped for this publisher
-        load_already_scraped_articles()
+    # Query all the urls already scraped for this publisher
+    load_already_scraped_articles()
 
     # Extract and save any new articles
     try:
