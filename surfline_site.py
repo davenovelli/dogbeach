@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import json
 import yaml
@@ -190,9 +191,9 @@ def DbToCsv(dbFileNamePath: str):
 @retry(Error, tries=6, delay=3, backoff=1.4, max_delay=30)
 def extract_article(post):
     article_id = post["id"]
-    permalink = post["permalink"]
+    permalink = post["permalink"].replace('#038;', '')
 
-    get_logger().info(permalink)
+    get_logger().info(f"extracting: {permalink}")
 
     url = f'https://www.surfline.com/surf-news/{article_id}'
     r = requests.get(url, timeout=None)
@@ -240,6 +241,20 @@ def extract_article(post):
         get_logger().error(f"Error: {status_code} status retrieving page")
         return None
 
+def scrub_url(url):
+    """ Remove any useless querystrings
+    """
+    print(url)
+    url = url.replace('#038;', '')
+    
+    utm_regex_str = r'(\\?)utm[^&]*(?:&utm[^&]*)*&(?=(?!utm[^\s&=]*=)[^\s&=]+=)|\\?utm[^&]*(?:&utm[^&]*)*$|&utm[^&]*/g'
+    utm_regex = re.compile(utm_regex_str, re.IGNORECASE)
+
+    scrubbed = re.sub(utm_regex, r'\1', url).rstrip('?')
+    
+    print(scrubbed)
+    return scrubbed
+
 def scrape():
     """ Main function driving the scraping process
     """
@@ -258,6 +273,15 @@ def scrape():
 
             for i in range(len(posts)): # = limit for all the iterations, except last one
                 post = posts[i]
+
+                # There appear to be promos from other sites (worldsurfleague.com is one I found) and we don't want to include that
+                if 'surfline.com' not in post['permalink']:
+                    continue
+
+                if 'utm' in post['permalink']:
+                    post['permalink'] = scrub_url(post['permalink'])
+                if post['permalink'] in already_scraped:
+                    continue
 
                 premium = post["premium"]
                 categories = [c["name"] for c in post["categories"]]
