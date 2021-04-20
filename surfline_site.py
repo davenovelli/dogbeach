@@ -268,6 +268,7 @@ def scrape():
 
         r = requests.get(f'https://www.surfline.com/wp-json/sl/v1/taxonomy/posts/category?limit={LIMIT}&offset={offset}', timeout=None) # timeout=None # for slowest sites, most stable
         data = r.json()
+        sleep(2)
 
         if data != None:
             posts = data["posts"]
