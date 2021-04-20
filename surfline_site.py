@@ -72,12 +72,23 @@ def get_logger():
 
 ##################################### Helper Functions
 
-def str_list(L: list) -> str:
-    if len(L):
-        l = str(list(dict.fromkeys(L))) # remove duplicates
+def parse_tags(tags_list: list) -> str:
+    print(f"Starting with {len(tags_list)} raw_tags: {tags_list}")
+    if len(tags_list):
+        # Convert all the tags to lower case
+        tags = [t.lower() for t in tags_list]
+        
+        # Drop duplicates and sort
+        tags = sorted(list(set(tags)))
+
+        # Convert from an array to a string
+        tags = ', '.join(tags)
     else:
-        l = []
-    return l
+        tags = ''
+    
+    print(f"Extracted {len(tags)} tags: {tags}")
+    return tags
+
 
 def load_already_scraped_articles():
     """ Query the database for all articles that have already been scraped
@@ -107,17 +118,16 @@ def create_article(article):
     article['userId'] = SYSTEM_USER_ID
     article['browserId'] = SCRAPER_BROWSER_ID
     article['publisher'] = PUBLISHER
-    get_logger().debug("Writing article to RDS...\n{}".format(article))
 
     header = { "Content-Type": "application/json" }
     json_data = json.dumps(article, default=str)
     r = requests.post(CREATE_ENDPOINT, headers=header, data=json_data)
-    get_logger().debug("\n\n=================================================================================\n\n")
-
     try:
         r.raise_for_status()
     except Exception as ex:
         get_logger().error(f"There was a {type(ex)} error while creating article {article['url']}:...\n{r.json()}")
+
+    get_logger().debug("\n\n=================================================================================\n\n")
 
 #####################################
 
@@ -157,8 +167,6 @@ SQL_Str = """CREATE TABLE IF NOT EXISTS series_categories
 """
 cursor.execute(SQL_Str)
 
-################################################################################
-
 def DbToCsv(dbFileNamePath: str):
     import csv
 
@@ -177,11 +185,7 @@ def DbToCsv(dbFileNamePath: str):
 
         writer.writerows(data)
 
-def SeriesCategories(series,categories):
-    output = [str(series),str(categories)]
-    print(output, flush=True)
-    cursor.execute(u"INSERT OR REPLACE INTO series_categories VALUES (" + (len(output)-1) * "?," + "?)", output)
-    con.commit()
+################################################################################
 
 @retry(Error, tries=6, delay=3, backoff=1.4, max_delay=30)
 def extract_article(post):
@@ -213,21 +217,15 @@ def extract_article(post):
         if not len(content):
             content = ". ".join([p.get_text(strip=True) for p in soup.select("div#sl-editorial-article-body")[0].select("p") if len(p.get_text(strip=True)) > 0]).replace('..', '.')
 
+        # Build full tags list from the categories, series, and existing tags
         categories = [c["name"] for c in post["categories"]]
         series = [s["name"] for s in post["series"]]
-
-        if soup.select("ul.sl-article-tags"):
-            atags = [a["href"].split("/")[-1] for a in soup.select("ul.sl-article-tags")[0].select("a")]
-        else:
-            atags = []
-
-        tags = [t.lower() for t in categories + series + atags]
-        tags = str_list(sorted(list(set(tags))))
+        atags = [a["href"].split("/")[-1] for a in soup.select("ul.sl-article-tags")[0].select("a")] if soup.select("ul.sl-article-tags") else []
+        tags = parse_tags(categories + series + atags)
         
         article_json = {
             'url': permalink,
-            'createdAt': post["createdAt"],
-            'category': categories[0],
+            'category': post['category'],
             'tags': tags,
             'title': post["title"],
             'subtitle' : post["subtitle"],
@@ -245,11 +243,10 @@ def extract_article(post):
 def scrape():
     """ Main function driving the scraping process
     """
-
     offset = config[PUBLISHER]['offset']
 
     df = pd.read_csv(f"data/{PUBLISHER}/alltags_ordered.csv", header=None)
-    cats = [row[0] for index,row in df.iterrows()]
+    ranked_categories = [row[0] for index,row in df.iterrows()]
 
     while(1):
 
@@ -265,29 +262,30 @@ def scrape():
                 premium = post["premium"]
                 categories = [c["name"] for c in post["categories"]]
                 series = [s["name"] for s in post["series"]]
+                tags = set(categories)
+                tags.update(set(series))
 
+                # Find the highest ranked tag that is present for this article
                 category = None
-                for cat in categories:
-                    if cat in cats:
+                for cat in ranked_categories:
+                    if cat in tags:
                         category = cat
-                        # print(f"\ncategory {category} found at ranking\n", flush=True) # tmp
                         break
 
+                # If we didn't find any tag in the rankings, choose the first category
                 if category == None:
-                    category = categories[0] # 1st category
+                    category = list(tags)[0]
 
-                if premium != True:
-                    for cat in categories:
-                        if cat in ["Español","Português","Premium"]:
-                            break
-                        elif cat == categories[-1]:
-                            # SeriesCategories(series,categories)
+                # Set the category for the post
+                post['category'] = category
+
+                # If the article is premium or not in English then skip it
+                if premium == False and len(tags.intersection({"Español", "Português", "Premium"})) == 0:
                             article = extract_article(post)
                             if PRODUCTION:
                                 if article is None:
                                     continue
                                 create_article(article)
-                                sleep(3)
         else:
             return
         offset += LIMIT
