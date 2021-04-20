@@ -226,6 +226,7 @@ def extract_article(post):
         
         article_json = {
             'url': permalink,
+            'publishedAt': post["createdAt"].replace(' ', 'T'),
             'category': post['category'],
             'tags': tags,
             'title': post["title"],
