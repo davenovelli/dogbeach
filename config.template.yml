@@ -13,8 +13,8 @@ magicseaweed.com:
 surfline.com:
     base_url: "https://www.surfline.com/"
     new_only: True
-    max_empty_pages: 3
-    limit: 6
+    max_empty_pages: 1
+    limit: 100
     offset: 0
     production: True
 stabmag:
