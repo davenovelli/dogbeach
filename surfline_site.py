@@ -264,6 +264,7 @@ def scrape():
     df = pd.read_csv(f"data/{PUBLISHER}/alltags_ordered.csv", header=None)
     ranked_categories = [row[0] for index,row in df.iterrows()]
 
+    empty_pages = 0
     while(1):
         get_logger().debug(f"Grabbing next {LIMIT} articles starting at offset {offset}")
         r = requests.get(f'https://www.surfline.com/wp-json/sl/v1/taxonomy/posts/category?limit={LIMIT}&offset={offset}', timeout=None) # timeout=None # for slowest sites, most stable
@@ -273,6 +274,7 @@ def scrape():
         if data != None:
             posts = data["posts"]
 
+            new_articles_found = 0
             for i in range(len(posts)): # = limit for all the iterations, except last one
                 post = posts[i]
 
@@ -297,7 +299,7 @@ def scrape():
                     if cat in tags:
                         category = cat
                         break
-
+                
                 # If we didn't find any tag in the rankings, choose the first category
                 if category == None:
                     category = list(tags)[0]
@@ -307,14 +309,25 @@ def scrape():
 
                 # If the article is premium or not in English then skip it
                 if premium == False and len(tags.intersection({"Español", "Português", "Premium"})) == 0:
-                            article = extract_article(post)
-                            if PRODUCTION:
-                                if article is None:
-                                    continue
-                                create_article(article)
+                    article = extract_article(post)
+                    if PRODUCTION:
+                        if article is None:
+                            continue
+                        create_article(article)
+                        new_articles_found += 1
         else:
             return
         
+        # Keep track of if we should stop due to no new articles found...
+        if new_articles_found > 1:
+            empty_pages = 0
+        else:
+            empty_pages += 1
+            if empty_pages >= MAX_EMPTY_PAGES:
+                get_logger().info("Max number of empty pages reached, quitting.")
+                return
+        
+        # Update to get the next page worth of articles
         offset += LIMIT
 
 if __name__ == '__main__':
