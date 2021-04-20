@@ -265,7 +265,7 @@ def scrape():
     ranked_categories = [row[0] for index,row in df.iterrows()]
 
     while(1):
-
+        get_logger().debug(f"Grabbing next {LIMIT} articles starting at offset {offset}")
         r = requests.get(f'https://www.surfline.com/wp-json/sl/v1/taxonomy/posts/category?limit={LIMIT}&offset={offset}', timeout=None) # timeout=None # for slowest sites, most stable
         data = r.json()
         sleep(2)
@@ -314,8 +314,8 @@ def scrape():
                                 create_article(article)
         else:
             return
+        
         offset += LIMIT
-        print(f"\noffset: {offset}\n", flush=True)
 
 if __name__ == '__main__':
     if PRODUCTION:
