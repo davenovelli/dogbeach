@@ -84,8 +84,11 @@ MODE_FULL = config[PUBLISHER]['mode_full']
 # Article count (how many to retrieve with each API call)
 COUNT = config[PUBLISHER]['articles_per_page']
 
+# Approximately how many articles do we want to check for something missing before giving up?
+MAX_SCRAPED_ARTICLES_BEFORE_QUIT = 50
+
 # How many pages of articles that we've entirely scraped should we try before quitting?
-MAX_SCRAPED_PAGES_BEFORE_QUIT = int(50 / COUNT) + 1
+MAX_SCRAPED_PAGES_BEFORE_QUIT = int(MAX_SCRAPED_ARTICLES_BEFORE_QUIT / COUNT) + 1
 
 # Which direction to retrieve
 SORT = 'asc' if MODE_FULL else 'desc'
@@ -324,6 +327,33 @@ def extract_article_list(post_source):
   
   return articles
 
+
+def remove_html_markup(s):
+    """ https://stackoverflow.com/questions/753052/strip-html-from-strings-in-python """
+    tag = False
+    quote = False
+    out = ""
+
+    for c in s:
+        if c == '<' and not quote:
+            tag = True
+        elif c == '>' and not quote:
+            tag = False
+        elif (c == '"' or c == "'") and tag:
+            quote = not quote
+        elif not tag:
+            out = out + c
+
+    return out
+
+
+def cleanup_text(s):
+    """ """
+    cleaned = s.replace("- Enlarge image", "").strip()
+
+    return cleaned
+
+
 def scrape_article(article):
     """ For the provided article url, load the article and find whatever data is available
 
@@ -332,7 +362,7 @@ def scrape_article(article):
     """
     # Load the article and wait for it to load
     print("\n\n=================================================================================\n")
-    get_logger().debug("Processing URL: {}".format(article['url']))
+    get_logger().debug(f"Processing URL: {article['url']}")
 
     if not get_driver().get_url(article['url'], tries=5):
         # We'll just have to skip this url, can't load it even with retries
@@ -368,7 +398,6 @@ def scrape_article(article):
       
       return
 
-    
     # Publication Date
     try:
       post_date = article_soup.select('span.post-byline__date')[0].string
@@ -390,8 +419,9 @@ def scrape_article(article):
 
     # Article Content
     content = article_soup.select('article.post-content div.post-body')[0].text.strip()
+    content = remove_html_markup(content) # This shouldn't be necessary, but there are some broken articles with html tags
+    content = cleanup_text(content)
     content = " ".join(content.split())
-    # print(content)
     article['text_content'] = content
     
     # Tags
@@ -434,7 +464,7 @@ def create_article(article):
       get_logger().error(f"There was a {exception_type} error while creating article {article['url']}:...\n{r.json()}")
 
 
-def extract_articles(articles):
+def extract_articles(articles, create=True):
   """
   Given a list of article objects (contains: URL, category, thumbnail, etc), extract the remainder of the data 
   for each and submit the data to the API endpoint
@@ -448,7 +478,7 @@ def extract_articles(articles):
     article = scrape_article(article)
     
     # If there was no scraping error, then send the article data to the REST API...
-    if article:
+    if article and create:
       create_article(article)
 
 
@@ -498,7 +528,25 @@ def cleanup():
     get_driver().driver.quit()
 
 
+def test_urls(urls):
+    """ This function will bypass the scheduled scraping logic and jump straight into extracting a particular URL """
+    articles = []
+    for url in urls:
+        articles += [{'url': url}]
+
+    extract_articles(articles, False)
+
+
 if __name__ == "__main__":
+    # test_articles = [
+    #     "https://www.surfer.com/features/gravity",
+    #     "https://www.surfer.com/magazine/drew-brees-is-on-a-mission-to-give-back-to-those-in-need",
+    #     "https://www.surfer.com/blogs/industry-news/2010-katin-pro-am-team-challenge-draws-near",
+    #     "https://www.surfer.com/surfing-magazine-archive/surfing-video/mick-fanning-2009-wct-champion-video"
+    # ]
+    # test_urls(test_articles)
+    # exit()
+
     kickoff_time = datetime.now(WESTCOAST).strftime('%Y-%m-%d %H:%M:%S')
     get_logger().info("Kicking off Surfer.com scraper at {}...".format(kickoff_time))
 
