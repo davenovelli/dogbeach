@@ -1,4 +1,5 @@
 import os
+import regex as re
 import sys
 import json
 import pytz
@@ -93,6 +94,10 @@ MAX_EMPTY_PAGES = config[PUBLISHER]['max_empty_pages']
 
 # Track the list of article urls that have already been scraped
 already_scraped = set()
+
+# A regex used to clean up some of the extracted text
+video_regex = re.compile('Volume \d+%.+')
+
 
 def get_logger():
     """ Initialize and/or return existing logger object
@@ -259,7 +264,10 @@ def extract_articles(articles):
     article = scrape_article(article)
     
     # Send the article data to the REST API...
-    create_article(article)
+    if article:
+        create_article(article)
+    else:
+        get_logger().error("Failed to scrape article\n")
 
 
 def scrape_article(article):
@@ -323,9 +331,48 @@ def scrape_article(article):
 
     # Article Content
     article = get_article_content(article_soup, article)
-    get_logger().debug(article)
+    # get_logger().debug(article)
 
     return article
+
+
+def remove_html_markup(s):
+    """ https://stackoverflow.com/questions/753052/strip-html-from-strings-in-python """
+    tag = False
+    quote = False
+    out = ""
+
+    for c in s:
+        if c == '<' and not quote:
+            tag = True
+        elif c == '>' and not quote:
+            tag = False
+        elif (c == '"' or c == "'") and tag:
+            quote = not quote
+        elif not tag:
+            out = out + c
+
+    return out
+
+
+def cleanup_text(s):
+    """ Perform know cleanup for the text content of the article
+    """
+    # The term "Advertisement" shows up wherever an ad was displayed
+    s = s.replace('Advertisement', '')
+    
+    # Use a regular expression to clear out boilerplate content from video iframe
+    s = video_regex.sub('', s).strip()
+    
+    # Remove any remaining html tags encountered
+    s = remove_html_markup(s)
+
+    # Strip whitespace
+    s = s.strip()
+
+    return s
+    
+
 
 def get_article_content(soup, article):
     """ Extract the information from the html element containing the article, and add it to the article's json
@@ -408,8 +455,8 @@ def get_article_content(soup, article):
         for iframe in iframes:
             iframe.decompose()
 
-    article_text = article_element.get_text().strip().rstrip('Advertisement')
-
+    article_text = cleanup_text(article_element.get_text())
+    
     # Populate the dictionary and return
     article['text_content'] = article_text
     article['type'] = article_type
@@ -454,7 +501,22 @@ def cleanup():
     get_driver().driver.quit()
 
 
+def test_urls(urls):
+    """ """
+    for url in urls:
+        test_article = scrape_article({'url': url})
+        print(test_article['text_content'])
+
+
 if __name__ == "__main__":
+    # urls = [
+    #     "https://www.theinertia.com/surf/this-hip-mobility-routine-will-improve-your-surfing-and-dynamic-movements"
+    #     # "https://www.theinertia.com/surf/these-5-videos-span-10-days-of-absolutely-psychotic-waves-in-bali",
+    #     # "https://www.theinertia.com/environment/it-takes-just-45-to-build-these-3-d-printed-prosthetic-hands-made-with-plastic-found-on-the-beach"
+    # ]
+    # test_urls(urls)
+    # exit()
+
     kickoff_time = datetime.now(WESTCOAST).strftime('%Y-%m-%d %H:%M:%S')
     get_logger().info("Kicking off The Inertia scraper at {}...".format(kickoff_time))
 
