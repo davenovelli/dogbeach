@@ -27,6 +27,7 @@ surfer.com:
     sleep: 5
     mode_full: False
     articles_per_page: 20
+    page_load_timeout: 60
 theinertia:
     articles_per_page: 12
     max_empty_pages: 3
