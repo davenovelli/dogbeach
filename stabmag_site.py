@@ -9,6 +9,8 @@ import logging
 import requests
 import numpy as np
 import pandas as pd
+import pprint
+pp = pprint.PrettyPrinter(indent=2, width=160)
 
 from pathlib import Path
 from bs4 import BeautifulSoup
@@ -124,7 +126,7 @@ def load_already_scraped_articles():
     return
 
 
-def get_author(post_meta, content_div):
+def get_author(article_soup, content_div):
     """ Attempt to extract a Person object from this article and return it if found, otherwise return None
 
     :param post_meta:
@@ -133,32 +135,71 @@ def get_author(post_meta, content_div):
     """
     author_json = {}
 
-    if len(post_meta.find_all("div")) > 1:
-        post_author_divs = post_meta.find_all("div")
-        post_author_div = post_author_divs[1]
-        post_author_spans = post_author_div.find_all("span")
-        post_author_span = post_author_spans[1]
+    # Start with the new format
+    new_author_div = article_soup.find("div", class_="category__label")
+    if new_author_div:
+        author_name = new_author_div.get_text().split("Words by")[-1].strip()
+        author_json['name'] = author_name
+    else:
+        post_meta = article_soup.find("div", class_="blog-post-meta")
+        if len(post_meta.find_all("div")) > 1:
+            post_author_divs = post_meta.find_all("div")
+            post_author_div = post_author_divs[1]
+            post_author_spans = post_author_div.find_all("span")
+            post_author_span = post_author_spans[1]
 
-        # Sometimes the author is "STAB" or has no link
-        if len(post_author_span.find_all("a")) > 0:
-            author_link = post_author_span.find("a")
-            author_url = 'https://stabmag.com/' + author_link.get('href')
-            author_name = author_link.get_text().title()
-            author_json['url'] = author_url
-        elif len(content_div.find_all(text="Story by")) > 0:
-            author_name = content_div.find_all(text="Story by")[0].get_text().lower().replace('story by', '').title()
-        elif 'class' in post_author_span.attrs and 'post-meta-last' in post_author_span.get("class"):
-            author_name = post_author_span.get_text().lower().replace('words by', '').title()
-        else:
-            return None
+            # Sometimes the author is "STAB" or has no link
+            if len(post_author_span.find_all("a")) > 0:
+                author_link = post_author_span.find("a")
+                author_url = 'https://stabmag.com/' + author_link.get('href')
+                author_name = author_link.get_text().title()
+                author_json['url'] = author_url
+            elif len(content_div.find_all(text="Story by")) > 0:
+                author_name = content_div.find_all(text="Story by")[0].get_text().lower().replace('story by', '').title()
+            elif 'class' in post_author_span.attrs and 'post-meta-last' in post_author_span.get("class"):
+                author_name = post_author_span.get_text().lower().replace('words by', '').title()
+            else:
+                return None
 
-        # If we made it here, there should be an author name
-        if author_name is not None:
-            author_json['name'] = author_name
-    # else:
-    #     print("No Author found")
+            # If we made it here, there should be an author name
+            if author_name is not None:
+                author_json['name'] = author_name
 
     return author_json
+
+
+def remove_html_markup(s):
+    """ https://stackoverflow.com/questions/753052/strip-html-from-strings-in-python """
+    tag = False
+    quote = False
+    out = ""
+
+    for c in s:
+        if c == '<' and not quote:
+            tag = True
+        elif c == '>' and not quote:
+            tag = False
+        elif (c == '"' or c == "'") and tag:
+            quote = not quote
+        elif not tag:
+            out = out + c
+
+    return out
+
+
+def cleanup_text(s):
+    """ Perform known cleanup for the text content of the article
+    """
+    # There has been, at some point, some weird utf characters that need to be removed
+    s = s.replace(u'\xa0', u' ')
+    
+    # Remove any html tags encountered
+    s = remove_html_markup(s)
+
+    # Strip whitespace
+    s = s.strip()
+
+    return s
 
 
 def scrape_article(article):
@@ -179,8 +220,10 @@ def scrape_article(article):
     soup = BeautifulSoup(source, "html.parser")
     article_soup = soup.find("article", class_="container")
     if article_soup is None:
-        get_logger().warning("Can't find the article. Skipping. {}".format(url))
-        return None
+        article_soup = soup.find("div", class_="article")
+        if article_soup is None:
+            get_logger().warning("Can't find the article. Skipping. {}".format(url))
+            return None
 
     # Get the title and subtitle
     title_h1 = article_soup.find("h1")
@@ -195,23 +238,36 @@ def scrape_article(article):
 
     # The post date should always be available
     post_meta_div = article_soup.find("div", class_="blog-post-meta")
-    post_date_div = post_meta_div.find_all("div")[0]
-    post_date = post_date_div.find_all("span")[1].find("a").get('href').replace("/news/archive/", "").replace("/", "-")
-    article['publishedAt'] = post_date
+    if post_meta_div:
+        post_date_div = post_meta_div.find_all("div")[0]
+        post_date = post_date_div.find_all("span")[1].find("a").get('href').replace("/news/archive/", "").replace("/", "-")
+        article['publishedAt'] = post_date
+    else:
+        title_credits = article_soup.find("div", class_="title-credits")
+        post_date = title_credits.get_text().split("//")[-1].split("\n")[0].strip()
+        article['publishedAt'] = post_date
 
     # Get the content
     content_div = article_soup.find("div", {"class": "content editable"})
-    content = content_div.get_text().strip()
-    content = content.replace(u'\xa0', u' ')
+    if content_div is None:
+        content_div = article_soup.find("div", class_="the-content")
+    
+    if content_div is None:
+        content = ""
+    else:
+        content = content_div.get_text().strip()
+        content = cleanup_text(content)
     article['text_content'] = content
 
-    author_json = get_author(post_meta_div, content_div)
+    # Get the author
+    author_json = get_author(article_soup, content_div)
     if author_json:
         if 'url' in author_json:
             article['author_url'] = author_json['url']
         if 'name' in author_json:
             article['author_name'] = author_json['name']
 
+    print(pp.pformat(article))
     return article
 
 
@@ -297,8 +353,17 @@ def scrape_pages():
     time.sleep(SLEEP)
 
     # Click the "load more" button so we have all of the first 20 results (only for first page)
-    more_button = get_driver('site').driver.find_element_by_class_name('pagination-load-more')
-    more_button.click()
+    from selenium.common.exceptions import NoSuchElementException
+    try:
+        more_button = get_driver('site').driver.find_element_by_class_name('pagination-load-more')
+    except NoSuchElementException as nseex:
+        try:
+            more_button = get_driver('site').driver.find_element_by_id('load-more')
+        except NoSuchElementException as nseex2:
+            get_logger().error("Can't find the 'Load More' button, quitting.")
+            exit()
+    print("\nsleeping for a bit to see if this button click will work...")
+    get_driver('site').driver.execute_script("arguments[0].click();", more_button)
     time.sleep(SLEEP)
     get_logger().debug("Got the news page")
 
@@ -337,7 +402,17 @@ def cleanup():
     get_driver('article').driver.quit()
 
 
+def test_urls(urls):
+    """ """
+    for url in urls:
+        scrape_article({'url': url})
+
+
 if __name__ == "__main__":
+    # urls = ["https://stabmag.com/news/wayne-rabbit"]
+    # test_urls(urls)
+    # exit()
+
     kickoff_time = datetime.now(WESTCOAST).strftime('%Y-%m-%d %H:%M:%S')
     get_logger().info("Kicking off the Stabmag scraper at {}...".format(kickoff_time))
 
