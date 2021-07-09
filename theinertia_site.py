@@ -97,6 +97,7 @@ already_scraped = set()
 
 # A regex used to clean up some of the extracted text
 video_regex = re.compile('Volume \d+%.+')
+more_videos_regex = re.compile('More Videos\d+:.+')
 
 
 def get_logger():
@@ -279,23 +280,27 @@ def scrape_article(article):
     # Load the article and wait for it to load
     get_logger().debug("Processing URL: {}".format(article['url']))
 
-    if not get_driver().get_url(article['url']):
+    # Try to load the page
+    fully_loaded = get_driver().get_url(article['url'])
+
+    # Sometime The Inertia pages take 10 minutes to finish loading because of an autoplay video
+    if not fully_loaded and not get_driver().driver.page_source:
         # We'll just have to skip this url, can't load it even with retries
         return
-
+    
     source = get_driver().clean_unicode(get_driver().driver.page_source)
     if 'ERROR 404' in source:
         get_logger().debug("Skipping (url is a 404) - {}".format(article['url']))
         return
-
+    
     # There are different formats/html structure so figure out which we're dealing with
     soup = BeautifulSoup(source, "html.parser")
     article_soup = soup.find("div", class_="inertia-article")
     if article_soup is None:
         article_soup = soup.find("main", class_="inertia-article")
-    if article_soup is None:
-        get_logger().error("Can't find the article container element in: {}".format(article['url']))
-        return()
+        if article_soup is None:
+            get_logger().error("Can't find the article container element in: {}".format(article['url']))
+            return()
 
     # Category
     category_soup = article_soup.find("small", {"itemprop": "articleSection"})
@@ -363,6 +368,7 @@ def cleanup_text(s):
     
     # Use a regular expression to clear out boilerplate content from video iframe
     s = video_regex.sub('', s).strip()
+    s = more_videos_regex.sub('', s).strip()
     
     # Remove any remaining html tags encountered
     s = remove_html_markup(s)
@@ -505,12 +511,15 @@ def test_urls(urls):
     """ """
     for url in urls:
         test_article = scrape_article({'url': url})
-        print(test_article['text_content'])
+        if test_article:
+            print(test_article['text_content'])
+        else:
+            print("there was a problem")
 
 
 if __name__ == "__main__":
     # urls = [
-    #     "https://www.theinertia.com/surf/this-hip-mobility-routine-will-improve-your-surfing-and-dynamic-movements"
+    #     "https://www.theinertia.com/surf/surf-community-rallies-to-get-adaptive-surfer-dariel-melendez-davila-a-prosthetic"
     #     # "https://www.theinertia.com/surf/these-5-videos-span-10-days-of-absolutely-psychotic-waves-in-bali",
     #     # "https://www.theinertia.com/environment/it-takes-just-45-to-build-these-3-d-printed-prosthetic-hands-made-with-plastic-found-on-the-beach"
     # ]
