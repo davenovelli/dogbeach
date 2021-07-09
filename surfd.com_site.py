@@ -173,6 +173,43 @@ def extract_article_video(sel):
     return article_video
 
 
+def remove_html_markup(s):
+    """ https://stackoverflow.com/questions/753052/strip-html-from-strings-in-python """
+    tag = False
+    quote = False
+    out = ""
+
+    for c in s:
+        if c == '<' and not quote:
+            tag = True
+        elif c == '>' and not quote:
+            tag = False
+        elif (c == '"' or c == "'") and tag:
+            quote = not quote
+        elif not tag:
+            out = out + c
+
+    return out
+
+
+def cleanup_text(s):
+    """ Perform know cleanup for the text content of the article
+    """
+    # There is a ton of whitespace that can be compressed to a single space
+    s = re.sub(r'\s+', ' ', s)
+    
+    # Remove any remaining html tags encountered
+    s = remove_html_markup(s)
+
+    # Remove this social footer text...
+    s = s.replace("Share Pin Tweet WhatsApp Email", '')
+
+    # Strip whitespace
+    s = s.strip()
+
+    return s
+
+
 def extract_link_data(link):
     """ For a given url, load the page and extract all available data
 
@@ -211,9 +248,9 @@ def extract_link_data(link):
     if thumbnail_image is None or len(thumbnail_image) == 0:
         thumbnail_image = ''
 
-    text_content = sel.xpath("*//div[@class='entry-content body-color clearfix link-color-wrap progresson']//text()").extract()
-    text_content = ' '.join(text_content)
-    text_content = re.sub(r'\s+',' ',text_content)
+    text_content = sel.xpath("*//div[contains(@class,'entry-content')]//text()").extract()
+    text_content = '\n'.join(text_content)
+    text_content = cleanup_text(text_content)
 
     article_video = extract_article_video(sel)
     
@@ -275,18 +312,16 @@ def extract_new_links():
 
         get_driver().get_url(CAT_URL_TEMPLATE.format(category))
 
-        source2 = get_driver()
-
         # If other screen appear, close
         try:
-            source2.driver.find_element_by_xpath("*//i[@class='tipi-i-close'])[2]").click()
+            get_driver().driver.find_element_by_xpath("*//i[@class='tipi-i-close'])[2]").click()
         except:
             pass
 
         # Click the "more" button until there are no more links in the category
         while True:
             try:
-                button_load_more = source2.driver.find_element_by_xpath("*//a[@class='block-loader tipi-button inf-load-more custom-button__fill-1 custom-button__size-1 custom-button__rounded-1']")
+                button_load_more = get_driver().driver.find_element_by_xpath("*//a[@class='block-loader tipi-button inf-load-more custom-button__fill-1 custom-button__size-1 custom-button__rounded-1']")
                 sleep(0.4)
                 
                 button_load_more.click()
@@ -294,7 +329,7 @@ def extract_new_links():
 
                 #if other screen appear,close
                 try:
-                    source2.driver.find_element_by_xpath("*//i[@class='tipi-i-close'])[2]").click()
+                    get_driver().driver.find_element_by_xpath("*//i[@class='tipi-i-close'])[2]").click()
                 except:
                     pass
             except:
@@ -341,7 +376,24 @@ def cleanup():
     get_driver().driver.quit()
 
 
+def test_urls(urls):
+    """ """
+    for url in urls:
+        test_article = extract_link_data(url)
+        if test_article:
+            print(test_article['text_content'])
+        else:
+            print("there was a problem")
+
+
 if __name__ == '__main__':
+    # urls = [
+    #     "https://surfd.com/2021/06/company-profile-globe-international/"
+    #     # "https://surfd.com/2021/06/company-profile-channel-islands-surfboards/"
+    # ]
+    # test_urls(urls)
+    # exit()
+
     # To get the script to see files in this directory (including chromedriver)
     os.chdir(os.path.dirname(sys.argv[0]))
 
