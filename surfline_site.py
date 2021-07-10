@@ -10,10 +10,10 @@ import pandas as pd
 
 from retry import retry
 from pathlib import Path
+from requests import Timeout
 from bs4 import BeautifulSoup
 from time import sleep, strftime
 from dateutil.parser import parse
-from playwright.sync_api import sync_playwright, Error, TimeoutError
 
 from dogbeach import doglog
 _logger = None
@@ -122,7 +122,7 @@ def create_article(article):
 
 ################################################################################
 
-@retry(Error, tries=6, delay=3, backoff=1.4, max_delay=30)
+@retry(Timeout, tries=6, delay=3, backoff=1.4, max_delay=30)
 def extract_article(post):
     article_id = post["id"]
     permalink = post["permalink"].replace('#038;', '')
