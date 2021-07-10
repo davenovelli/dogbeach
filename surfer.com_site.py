@@ -195,7 +195,7 @@ def extract_article_image(element):
       img = img_element['src']
     else:
       # There is an image without a src? seems unlikely but we'll capture it
-      get_logger().warn(f"Article found with src-less image element: {img_element}")
+      get_logger().warning(f"Article found with src-less image element: {img_element}")
       img = ''
   # print(f"Thumbnail: {img}")
 
@@ -284,7 +284,7 @@ def extract_article_list(post_source):
 
   article_elements = soup.find_all("article")
   if len(article_elements) == 0:
-    get_logger().warn("No articles found to extract")
+    get_logger().warning("No articles found to extract")
   else:
     get_logger().info("Extracting {} articles starting with: {}".format(len(article_elements), article_elements[0].find('a').get('href')))
   
@@ -302,7 +302,7 @@ def extract_article_list(post_source):
 
     surfer_dot_com_regex = r"^https?:\/\/(www\.)?surfer.com"
     if not re.search(surfer_dot_com_regex, url, re.M|re.I):
-      get_logger().warn("This link is to a different domain, skip it")
+      get_logger().warning("This link is to a different domain, skip it")
       continue
     
     img = extract_article_image(article_element)
