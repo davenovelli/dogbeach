@@ -10,3 +10,4 @@ dogbeach/__pycache__
 .ipynb_checkpoints
 .vscode
 config.yml
+*.pickle
