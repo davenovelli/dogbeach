@@ -35,3 +35,6 @@ theinertia:
     retries: 5
     page_load_timeout: 10
     log_clevel: DEBUG
+youtube:
+    videos_per_page: 50
+    max_empty_pages: 3

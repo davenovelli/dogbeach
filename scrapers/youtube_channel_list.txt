@@ -1,0 +1,45 @@
+channel_name,channel_id
+Aussie Surf Clips,UCsqJ6vSWwvTh822u97j1SCg
+Barefoot Surf,UCvOh9i-BOFzu51rpj33fGag
+BEEFS T.V.,UCf5CA0OsvhhU-6AcSjT1oKQ
+Ben Considine,UCiNueUTUjUKMtZtiMazylwg
+Ben Gravy,UC4qa5EroJxnQM6Sng9WhgsQ
+Brad Jacobson,UCsXYYt9hmwvaIl6v73JHKWw
+Brett Barley,UCwU_XmppMy9R9k4YJET7R6w
+Brisa Hennessy,UCxWANxLLfJdRouGYO-S0lbA
+CI Surfboards,UCN8yvWNHBr5efDkWhpimGCw
+Coco Ho,UCtnbHYjopf6uESGwuMAp9tg
+Cola Bros,UCzShHPVtWXrPmlw43tsZnww
+FCS FINS,UCkfBJX3pJtkX9elOJ3KvGVw
+freesurfmag,UCSoF7GdKjYzPeBX_Ppe3uAw
+Ho & Pringle Productions,UCeYue9Nbodzg3T1Nt88E3fg
+ISAsurfing,UCZhixj2QS9WzrluwSc9iCzA
+Italo Ferreira,UCBAtiokiAR1D320knY_yXyQ
+Jamie O'Brien,UCo_q6aOlvPH7M-j_XGWVgXg
+John John Florence,UCNyxrRXa3PvyJYuFP51iU-Q
+Kai Lenny,UCmzxts0YGES5tN-oJ9abTQg
+Kevin Jansen,UCPmWpDVbnZvUjUC5kEFRtIQ
+Koa Rothman,UC_F4Iy5korq2mEWZDQhG07w
+Lakey Peterson,UCetqivVVEGv6diBDDM0ItQg
+LogRap,UCJZL3rpGw49x_GNylID9hzg
+Nathan Florence,UC6uX6GF5q2JxLjMkyivM2Og
+Nic Von Rupp,UCnDcnuhRMNxsI14ZnwIh6fQ
+NobodySurf : Surfing Videos,UCOtHosOqPe9d6vLy-8LfHzQ
+O'Neill Womens,UCCbFcxyVG3O7xkQtbVF8H7A
+Quiksilver,UCwMV2FVARycp5_p665_eyZg
+Red Bull Surfing,UC--3c8RqSfAqYBdDjIG3UNA
+Reef,UCkC9iBqG8YWKkxh9BYyKV3A
+Rip Curl,UCM7nkBGadxKOa4DAJVFwoWg
+rvca,UCOHPBvh_QbRlUmkxGGwJrTw
+SoCal Surfer,UCJBWZDkunrjWh50Etxdys2g
+Stab: We like to surf,UCsG5dkqFUHZO6eY9uOzQqow
+Surf Raw Files,UCK_kztIv-vT7yPrziDrSMbA
+Surfer,UCKo-NbWOxnxBnU41b-AoKeA
+Surfers of Bali,UCzcQOTuXYGuCvTekySb_CeQ
+Surfing,UCKGh9wTkV82wkomm4Wyfb_A
+SURFING VISIONS,UCiWTRcls77dL9YHCrpE09wQ
+Tatiana Weston-Webb,UCcAcxPok-YQFI4aSs7eJhlg
+The Raglan Surf Report,UCaoh6jhQDMBTTJjMftaH1Wg
+The Smith Brothers,UCm9NnEJTi7_B86QWgQiUCJA
+thegirlsofsurfing,UCVk7uRN7g-q_uHMaAjHxk8A
+World Surf League,UChuLeaTGRcfzo0UjL-2qSbQ
