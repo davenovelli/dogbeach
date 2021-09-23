@@ -88,11 +88,11 @@ def get_already_scraped(channel_names):
         r = requests.get(PUBLISHER_ARTICLES_ENDPOINT + urllib.parse.quote_plus(channel_name))
         urls_json = r.json()
         channel_urls = set([x['url'] for x in urls_json])
-        print(f"{channel_name}: {len(channel_urls)} videos found")
+        get_logger().debug(f"{channel_name}: {len(channel_urls)} videos found")
 
         ALREADY_SCRAPED.update(channel_urls)
 
-    # print(ALREADY_SCRAPED)
+    # get_logger().debug(ALREADY_SCRAPED)
     get_logger().debug("Found {} articles already scraped".format(len(ALREADY_SCRAPED)))
     
 
@@ -116,16 +116,16 @@ def get_playlists(channel_ids):
     """
     playlist_ids = []
     for channel_id in channel_ids:
-        print(f"Channel:  {channel_id}")
+        get_logger().debug(f"Channel:  {channel_id}")
         request = get_youtube().channels().list(
             part="contentDetails",
             id=channel_id
         )
         response = request.execute()
-        # print(json.dumps(response, sort_keys=True, indent=2))
+        # get_logger().debug(json.dumps(response, sort_keys=True, indent=2))
         
         uploads_playlist_id = response['items'][0]['contentDetails']['relatedPlaylists']['uploads']
-        print(f"Playlist: {uploads_playlist_id}")
+        get_logger().debug(f"Playlist: {uploads_playlist_id}")
         playlist_ids += [uploads_playlist_id]
 
     return playlist_ids
@@ -136,7 +136,7 @@ def extract_video_data(video_json):
     
     """
     video = video_json['snippet']
-    # print(video)
+    # get_logger().debug(video)
     extracted = {
         'id': video['resourceId']['videoId'],
         'publishedAt': video['publishedAt'],
@@ -149,10 +149,10 @@ def extract_video_data(video_json):
 
     if 'tags' in video and len(video['tags']) > 0:
         tags = video['tags']
-        # print(tags)
+        # get_logger().debug(tags)
         extracted['tags'] = ",".join(tags)
 
-    # print(extracted)
+    # get_logger().debug(extracted)
     return extracted
 
 
@@ -219,8 +219,8 @@ def scrape_playlist(playlist_id):
         # Execute request and set parameters for next iteration
         response = request.execute()
         time.sleep(1)
-        # print(response)
-        # print(json.dumps(response, sort_keys=True, indent=4))
+        # get_logger().debug(response)
+        # get_logger().debug(json.dumps(response, sort_keys=True, indent=4))
 
         if not 'nextPageToken' in response:
             # No more pages to scrape
@@ -244,14 +244,14 @@ def scrape_playlist(playlist_id):
         )
         video_response = video_request.execute()
         time.sleep(1)
-        # print(video_response)
-        # print(json.dumps(video_response, sort_keys=True, indent=4))
+        # get_logger().debug(video_response)
+        # get_logger().debug(json.dumps(video_response, sort_keys=True, indent=4))
 
         video_durations = {}
         for video_item in video_response['items']:
             video_durations[video_item['id']] = {'duration': parse_duration_in_seconds(video_item['contentDetails']['duration'])}
         
-        # print(video_durations)
+        # get_logger().debug(video_durations)
 
         for page_video in page_videos:
             page_video['duration'] = video_durations[page_video['id']]['duration']
@@ -259,9 +259,9 @@ def scrape_playlist(playlist_id):
         # Filter out any videos that aren't at least 3 minutes long...
         page_videos = [x for x in page_videos if x['duration'] >= MIN_VIDEO_DURATION]
         
-        # print(json.dumps(page_videos, sort_keys=True, indent=4))
-        print(f"{vid_count_before} videos were trimmed down to: {len(page_videos)}")
-        print(f"There are {len(page_videos)} new videos of sufficient duration on this page")
+        # get_logger().debug(json.dumps(page_videos, sort_keys=True, indent=4))
+        get_logger().debug(f"{vid_count_before} videos were trimmed down to: {len(page_videos)}")
+        get_logger().debug(f"There are {len(page_videos)} new videos of sufficient duration on this page")
 
         if len(page_videos) > 0:
             new_videos += page_videos
@@ -271,8 +271,8 @@ def scrape_playlist(playlist_id):
             if consecutive_empty_pages >= MAX_EMPTY_PAGES:
                 more = False
     
-    print(f"There are {len(new_videos)} new videos of sufficient duration on this channel to add to the database")
-    # print(json.dumps(new_videos, sort_keys=True, indent=4))
+    get_logger().debug(f"There are {len(new_videos)} new videos of sufficient duration on this channel to add to the database")
+    # get_logger().debug(json.dumps(new_videos, sort_keys=True, indent=4))
     
     return new_videos
 
@@ -293,7 +293,7 @@ def create_videos(videos):
         video_str = f"WRITING: {video['publisher']} : {video['publishedAt']} : {video['title']}"
         if 'tags' in video:
             video_str +=  f":::::::::::::: {video['tags']}"
-        print(video_str)
+        get_logger().debug(video_str)
 
         header = { "Content-Type": "application/json" }
         json_data = json.dumps(video, default=str)
@@ -324,15 +324,15 @@ def scrape_playlists(playlist_ids):
 def main():
     # Get the list of channels and ids to scrape from a config file
     channels = get_channels()
-    print(f"Channels: {channels}")
+    get_logger().debug(f"Channels: {channels}")
     
     # For each channel get the "Uploads" playlist id
     playlists = get_playlists(channels)
-    print(f"Playlists: {playlists}")
+    get_logger().debug(f"Playlists: {playlists}")
     
     # For each playlist, extract the data from all videos
     videos = scrape_playlists(playlists)
-    print(f"Scraped {len(videos)} total videos")
+    get_logger().debug(f"Scraped {len(videos)} total videos")
     
     # Cleanup TODO: Move this to a post-script function that runs every time
     get_youtube().close()
