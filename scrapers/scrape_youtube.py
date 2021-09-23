@@ -5,6 +5,7 @@
 # https://developers.google.com/explorer-help/guides/code_samples#python
 
 import os
+import re
 import sys
 import json
 import time
@@ -109,26 +110,6 @@ def get_channels():
     channel_ids = df.channel_id.tolist()
     
     return channel_ids
-
-
-def get_playlists(channel_ids):
-    """
-    """
-    playlist_ids = []
-    for channel_id in channel_ids:
-        get_logger().debug(f"Channel:  {channel_id}")
-        request = get_youtube().channels().list(
-            part="contentDetails",
-            id=channel_id
-        )
-        response = request.execute()
-        # get_logger().debug(json.dumps(response, sort_keys=True, indent=2))
-        
-        uploads_playlist_id = response['items'][0]['contentDetails']['relatedPlaylists']['uploads']
-        get_logger().debug(f"Playlist: {uploads_playlist_id}")
-        playlist_ids += [uploads_playlist_id]
-
-    return playlist_ids
 
 
 def extract_video_data(video_json):
@@ -324,10 +305,11 @@ def scrape_playlists(playlist_ids):
 def main():
     # Get the list of channels and ids to scrape from a config file
     channels = get_channels()
-    get_logger().debug(f"Channels: {channels}")
+    get_logger().debug(f"Channels : {channels}")
     
-    # For each channel get the "Uploads" playlist id
-    playlists = get_playlists(channels)
+    # The playlist id for the "Uploads" playlist of each channel is just the channel_id with the UC prefix changed to UU
+    prefix_swap = lambda x: re.sub('^UC', 'UU', x)
+    playlists = list(map(prefix_swap, channels))
     get_logger().debug(f"Playlists: {playlists}")
     
     # For each playlist, extract the data from all videos
