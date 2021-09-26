@@ -10,6 +10,7 @@ import sys
 import json
 import time
 import yaml
+import atexit
 import logging
 import requests
 import urllib.parse
@@ -18,9 +19,8 @@ from pathlib import Path
 import googleapiclient.discovery
 import googleapiclient.errors
 
-youtube = None
-
-scopes = ["https://www.googleapis.com/auth/youtube.readonly"]
+# The singleton containing the google api client object
+YOUTUBE = None
 
 ##################################### Config
 os.chdir(os.path.dirname(sys.argv[0]))
@@ -73,11 +73,20 @@ def get_logger():
 def get_youtube():
     """ Singleton for the youtube service object
     """
-    global youtube
+    global YOUTUBE
+
     # Establish the service object
-    if youtube is None:
-        youtube = googleapiclient.discovery.build("youtube", "v3", developerKey='AIzaSyBFN6xIuoulmTiHFcT2DRHAkYxTNH1NKNc')
-    return youtube
+    if YOUTUBE is None:
+        YOUTUBE = googleapiclient.discovery.build("youtube", "v3", developerKey='AIzaSyBFN6xIuoulmTiHFcT2DRHAkYxTNH1NKNc')
+    
+    return YOUTUBE
+
+
+@atexit.register
+def close_youtube():
+    """ Function to run after script completes
+    """
+    get_youtube().close()
 
 
 def get_already_scraped(channel_names):
@@ -315,10 +324,6 @@ def main():
     # For each playlist, extract the data from all videos
     videos = scrape_playlists(playlists)
     get_logger().debug(f"Scraped {len(videos)} total videos")
-    
-    # Cleanup TODO: Move this to a post-script function that runs every time
-    get_youtube().close()
-    exit()
 
 
 if __name__ == "__main__":
