@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-
-# Sample Python code for youtube.playlistItems.list
-# See instructions for running these code samples locally:
-# https://developers.google.com/explorer-help/guides/code_samples#python
-
 import os
 import re
 import sys
@@ -122,8 +116,7 @@ def get_channels():
 
 
 def extract_video_data(video_json):
-    """ For every video, extract the data into the schema format
-    
+    """ For every video, extract the data into the YewReview Article schema format    
     """
     video = video_json['snippet']
     # get_logger().debug(video)
@@ -151,6 +144,7 @@ def parse_duration_in_seconds(duration_string):
     """
     day_time = duration_string.split('T')
     day_duration = day_time[0].replace('P', '')
+    
     day_list = day_duration.split('D')
     if len(day_list) == 2:
         day = int(day_list[0]) * 60 * 60 * 24
@@ -158,6 +152,7 @@ def parse_duration_in_seconds(duration_string):
     else:
         day = 0
         day_list = day_list[0]
+    
     hour_list = day_time[1].split('H')
     if len(hour_list) == 2:
         hour = int(hour_list[0]) * 60 * 60
@@ -165,6 +160,7 @@ def parse_duration_in_seconds(duration_string):
     else:
         hour = 0
         hour_list = hour_list[0]
+    
     minute_list = hour_list.split('M')
     if len(minute_list) == 2:
         minute = int(minute_list[0]) * 60
@@ -172,6 +168,7 @@ def parse_duration_in_seconds(duration_string):
     else:
         minute = 0
         minute_list = minute_list[0]
+    
     second_list = minute_list.split('S')
     if len(second_list) == 2:
         second = int(second_list[0])
@@ -183,28 +180,33 @@ def parse_duration_in_seconds(duration_string):
 
 def scrape_playlist(playlist_id):
     """ Get all the videos for a specific playlist id
+
+    This function makes requests of the Youtube API, which limits a maximum of 50 videos per page. Any new videos found will be
+    saved to the database. If there are a sufficient number of pages requested without any new videos, the scraper will stop.
     """
     global ALREADY_SCRAPED
     
+    # Array containing all videos added across the pages
     new_videos = []
-    more = True
-    nextPageToken = None
+
+    # Keep track of how many pages we've scraped without finding a new article
     consecutive_empty_pages = 0
+
+    # Set the parameters for the current page request
+    params = {
+        "part": "snippet,contentDetails",
+        "playlistId": playlist_id,
+        "maxResults": RESULTS_PER_PAGE,                
+    }
+    
+    # Flag for a do-while loop
+    more = True
     while more:
-        # Generate the request based on the current page we want
-        if nextPageToken:
-            request = get_youtube().playlistItems().list(
-                part = "snippet,contentDetails",
-                playlistId = playlist_id,
-                maxResults = RESULTS_PER_PAGE,
-                pageToken = nextPageToken
-            )
-        else:
-            request = get_youtube().playlistItems().list(
-                part = "snippet,contentDetails",
-                playlistId = playlist_id,
-                maxResults = RESULTS_PER_PAGE
-            )
+        ##################################################################
+        # Process the request
+
+        # Request the page
+        request = get_youtube().playlistItems().list(**params)
         
         # Execute request and set parameters for next iteration
         response = request.execute()
@@ -212,67 +214,67 @@ def scrape_playlist(playlist_id):
         # get_logger().debug(response)
         # get_logger().debug(json.dumps(response, sort_keys=True, indent=4))
 
-        if not 'nextPageToken' in response:
+        if 'nextPageToken' in response:
+            # Update the pageToken parameter for the next loop
+            params['pageToken'] = response['nextPageToken']            
+        else:
             # No more pages to scrape
             more = False
-        else:
-            # We're not done yet
-            nextPageToken = response['nextPageToken']
         
-        page_videos = [extract_video_data(x) for x in response['items']]
-        vid_count_before = len(page_videos)
+        ##################################################################
+        # Process the response
 
+        # Extract the necessary data from the response
+        page_videos = [extract_video_data(x) for x in response['items']]
+        
+        # Filter out the videos we've already scraped
         page_videos = [x for x in page_videos if x['url'] not in ALREADY_SCRAPED]
         
         # Get the IDs of the videos from this page of the current playlist
         video_ids = [x['id'] for x in page_videos]
 
-        # Query the duration of each video so we can eliminate short videos before checking for duplicates
+        # Query the duration of each new video so we can eliminate short videos before checking for duplicates
         video_request = get_youtube().videos().list(
             part = "contentDetails",
             id = ",".join(video_ids)
         )
         video_response = video_request.execute()
         time.sleep(1)
-        # get_logger().debug(video_response)
         # get_logger().debug(json.dumps(video_response, sort_keys=True, indent=4))
 
+        # Process the video duration response
         video_durations = {}
         for video_item in video_response['items']:
             video_durations[video_item['id']] = {'duration': parse_duration_in_seconds(video_item['contentDetails']['duration'])}
-        
         # get_logger().debug(video_durations)
 
+        # Merge the durations into the new page data
         for page_video in page_videos:
             page_video['duration'] = video_durations[page_video['id']]['duration']
         
         # Filter out any videos that aren't at least 3 minutes long...
-        page_videos = [x for x in page_videos if x['duration'] >= MIN_VIDEO_DURATION]
-        
-        # get_logger().debug(json.dumps(page_videos, sort_keys=True, indent=4))
-        get_logger().debug(f"{vid_count_before} videos were trimmed down to: {len(page_videos)}")
+        page_videos = [x for x in page_videos if x['duration'] >= MIN_VIDEO_DURATION]        
         get_logger().debug(f"There are {len(page_videos)} new videos of sufficient duration on this page")
 
-        if len(page_videos) > 0:
-            new_videos += page_videos
-            consecutive_empty_pages = 0
-        else:
+        ##################################################################
+        # Determine whether to continue
+
+        # If we found no new videos, and we've reached the limit for empty pages, then stop looping
+        if len(page_videos) == 0:
             consecutive_empty_pages += 1
             if consecutive_empty_pages >= MAX_EMPTY_PAGES:
                 more = False
+        else:
+            new_videos += page_videos
+            consecutive_empty_pages = 0
     
     get_logger().debug(f"There are {len(new_videos)} new videos of sufficient duration on this channel to add to the database")
-    # get_logger().debug(json.dumps(new_videos, sort_keys=True, indent=4))
-    
+        
     return new_videos
 
 
 def create_videos(videos):
-    """
-    Push the videos to the database through the REST API
-
-    :param articles:
-    :return:
+    """ Push the videos to the database through the REST API
     """
     for video in videos:
         # Add some common fields
@@ -281,14 +283,11 @@ def create_videos(videos):
         video = {key:val for key, val in video.items() if key not in ['id', 'duration']}
         # get_logger().debug("Writing article to RDS...\n{}".format(video))
         video_str = f"WRITING: {video['publisher']} : {video['publishedAt']} : {video['title']}"
-        if 'tags' in video:
-            video_str +=  f":::::::::::::: {video['tags']}"
         get_logger().debug(video_str)
 
         header = { "Content-Type": "application/json" }
         json_data = json.dumps(video, default=str)
         r = requests.post(CREATE_ENDPOINT, headers=header, data=json_data)
-        # get_logger().debug("\n\n=================================================================================\n\n")
         
         try:
             r.raise_for_status()
@@ -323,7 +322,7 @@ def main():
     
     # For each playlist, extract the data from all videos
     videos = scrape_playlists(playlists)
-    get_logger().debug(f"Scraped {len(videos)} total videos")
+    get_logger().debug(f"Scraped {len(videos)} total videos")    
 
 
 if __name__ == "__main__":
