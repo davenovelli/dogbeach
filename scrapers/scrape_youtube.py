@@ -59,7 +59,7 @@ def get_logger():
     """
     global _logger
     if _logger is None:
-        logfile = Path(os.path.dirname(os.path.realpath("__file__"))) / f"../log/youtube_site.log"
+        logfile = Path(os.path.dirname(os.path.realpath("__file__"))) / f"../log/youtube.log"
         _logger = doglog.setup_logger(f'youtube', logfile, clevel=logging.DEBUG)
     return _logger
 
