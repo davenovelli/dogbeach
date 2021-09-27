@@ -18,7 +18,7 @@ _logger = None
 
 ##################################### Config
 os.chdir(os.path.dirname(sys.argv[0]))
-with open("config.yml", "r") as ymlfile:
+with open("../config.yml", "r") as ymlfile:
     config = yaml.load(ymlfile, Loader=yaml.FullLoader)
 
 PUBLISHER = 'magicseaweed.com'
@@ -60,7 +60,7 @@ def get_logger():
     """
     global _logger
     if _logger is None:
-        logfile = Path(os.path.dirname(os.path.realpath("__file__"))) / f"log/{PUBLISHER}_site.log"
+        logfile = Path(os.path.dirname(os.path.realpath("__file__"))) / f"../log/{PUBLISHER}_site.log"
         _logger = doglog.setup_logger(f'{PUBLISHER}_site', logfile, clevel=logging.DEBUG)
     return _logger
 
@@ -195,11 +195,11 @@ def scrape():
         page_url = f"{BASE_URL}/news/features/?page=0"
         page.goto(page_url)
         
-        LastPageNum = int(page.query_selector("text=/.*Last.*/").get_attribute("href").split("/")[-2])
+        last_page_num = int(page.query_selector("text=/.*Last.*/").get_attribute("href").split("/")[-2])
         
         empty_page_count = 0
-        for page_n in range(1, LastPageNum + 1):
-            get_logger().info(f"\npage: {page_n} of {LastPageNum}\n")
+        for page_n in range(1, last_page_num + 1):
+            get_logger().info(f"\npage: {page_n} of {last_page_num}\n")
 
             if page_n > 1:
                 page_url = f"https://magicseaweed.com/news/features/?page={page_n}"
