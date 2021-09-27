@@ -20,7 +20,7 @@ _logger = None
 
 ##################################### Config
 os.chdir(os.path.dirname(sys.argv[0]))
-with open("config.yml", "r") as ymlfile:
+with open("../config.yml", "r") as ymlfile:
     config = yaml.load(ymlfile, Loader=yaml.FullLoader)
 
 PUBLISHER = 'surfline.com'
@@ -57,7 +57,7 @@ def get_logger():
     """
     global _logger
     if _logger is None:
-        logfile = Path(os.path.dirname(os.path.realpath("__file__"))) / f"log/{PUBLISHER}_site.log"
+        logfile = Path(os.path.dirname(os.path.realpath("__file__"))) / f"../log/{PUBLISHER}_site.log"
         _logger = doglog.setup_logger(f'{PUBLISHER}_site', logfile, clevel=logging.DEBUG)
     return _logger
 
