@@ -13,13 +13,17 @@ from time import sleep, strftime
 from dateutil.parser import parse
 from playwright.sync_api import sync_playwright, Error, TimeoutError
 
-from dogbeach import doglog
-_logger = None
-
-##################################### Config
+# Config
 os.chdir(os.path.dirname(sys.argv[0]))
 with open("../config.yml", "r") as ymlfile:
     config = yaml.load(ymlfile, Loader=yaml.FullLoader)
+
+# Import Doglog
+sys.path.append('..')
+from dogbeach import doglog
+from dogbeach.dogdriver import DogDriver
+
+_logger = None
 
 PUBLISHER = 'magicseaweed.com'
 BASE_URL = config[PUBLISHER]['base_url']

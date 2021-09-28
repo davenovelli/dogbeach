@@ -26,24 +26,25 @@ from pathlib import Path
 from datetime import datetime
 from xml.sax.saxutils import escape, unescape
 
-from dogbeach import doglog
-from dogbeach.dogdriver import DogDriver
-
 import pprint
 pp = pprint.PrettyPrinter(indent=2, width=200)
 
 
+# Config
+os.chdir(os.path.dirname(sys.argv[0]))
+with open("../config.yml", "r") as ymlfile:
+    config = yaml.load(ymlfile, Loader=yaml.FullLoader)
+
+# Import Doglog
+sys.path.append('..')
+from dogbeach import doglog
+from dogbeach.dogdriver import DogDriver
+
 _logger = None
-_engine = None
 _driver = None
 
 # What is the identifier for this scraper?
 PUBLISHER = 'surfer.com'
-
-##################################### Config
-os.chdir(os.path.dirname(sys.argv[0]))
-with open("../config.yml", "r") as ymlfile:
-    config = yaml.load(ymlfile, Loader=yaml.FullLoader)
 
 # Log level
 levels = {

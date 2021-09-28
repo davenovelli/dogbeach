@@ -15,19 +15,20 @@ from datetime import datetime
 from scrapy.selector import Selector
 from selenium.webdriver.common.keys import Keys
 
+# Config
+os.chdir(os.path.dirname(sys.argv[0]))
+with open("../config.yml", "r") as ymlfile:
+    config = yaml.load(ymlfile, Loader=yaml.FullLoader)
+
+# Import Doglog
+sys.path.append('..')
 from dogbeach import doglog
 from dogbeach.dogdriver import DogDriver
 
 _logger = None
-_engine = None
 _driver = None
 
 PUBLISHER = 'surfd.com'
-
-##################################### Config
-os.chdir(os.path.dirname(sys.argv[0]))
-with open("../config.yml", "r") as ymlfile:
-    config = yaml.load(ymlfile, Loader=yaml.FullLoader)
 
 # Log level
 levels = {
