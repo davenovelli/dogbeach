@@ -15,25 +15,25 @@ from pathlib import Path
 from bs4 import BeautifulSoup
 from datetime import datetime
 
-from dogbeach import doglog
-from dogbeach.dogdriver import DogDriver
-
 
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_colwidth', 75)
 pd.set_option('display.width', 500)
 
-
-_logger = None
-_engine = None
-_driver = None
-
-PUBLISHER = 'theinertia'
-
-##################################### Config
+# Config
 os.chdir(os.path.dirname(sys.argv[0]))
 with open("../config.yml", "r") as ymlfile:
     config = yaml.load(ymlfile, Loader=yaml.FullLoader)
+
+# Import Doglog
+sys.path.append('..')
+from dogbeach import doglog
+from dogbeach.dogdriver import DogDriver
+
+_logger = None
+_driver = None
+
+PUBLISHER = 'theinertia'
 
 # Log level
 levels = {

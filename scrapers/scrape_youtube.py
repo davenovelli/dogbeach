@@ -16,11 +16,12 @@ import googleapiclient.errors
 # The singleton containing the google api client object
 YOUTUBE = None
 
-##################################### Config
+# Config
 os.chdir(os.path.dirname(sys.argv[0]))
 with open("../config.yml", "r") as ymlfile:
     config = yaml.load(ymlfile, Loader=yaml.FullLoader)
 
+# Import Doglog
 sys.path.append('..')
 from dogbeach import doglog
 _logger = None
