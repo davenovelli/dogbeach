@@ -98,8 +98,8 @@ def get_articles():
     print("Getting articles from the database")
 
     allArticlesQuery = """
- SELECT article_id, publisher, url, feedDate, tags, title, subtitle, text_content
-   FROM articles a
+ SELECT id, publisher, url, feedDate, publisherTags, title, subtitle, text_content
+   FROM Article a
   ORDER BY feedDate DESC
 """
     print(allArticlesQuery)
@@ -117,7 +117,7 @@ def get_articles():
                 .assign(textlen=lambda df: df.text.str.len())
                 .query('textlen > @MIN_ARTICLE_LENGTH')
                 .drop('textlen', axis=1)
-                .sort_values('article_id', ascending=False)
+                .sort_values('id', ascending=False)
             )
 
             # preserve approved terms containing apostrophes
@@ -132,7 +132,7 @@ def get_articles():
             taggedArticlesQuery = "SELECT DISTINCT articleId FROM ArticleTag WHERE `source` = 'tfidf' and `deletedAt` IS NULL"
             df = (
                 pd.read_sql(taggedArticlesQuery, connection).astype(int).sort_values('articleId', ascending=False)
-                .merge(df, how='right', left_on='articleId', right_on='article_id')
+                .merge(df, how='right', left_on='articleId', right_on='id')
                 .query('articleId.isna()')
                 .drop('articleId', axis=1)
             )
@@ -241,7 +241,7 @@ def process_results(df_idf, cv, tfidf_transformer):
     frames = []
     for i in range(articles.shape[0]):
         # get the article_id
-        article_id = articles.article_id.iloc[-i]
+        id = articles.id.iloc[-i]
         
         # get the url
         url = articles.url.iloc[-i]
@@ -265,7 +265,7 @@ def process_results(df_idf, cv, tfidf_transformer):
         
         keywords_df = (
             pd.DataFrame(keywords.items(), columns=['keyword', 'tfidf_weight'])
-            .assign(article_id=article_id)
+            .assign(id=id)
             .assign(url=url)
             .assign(rank=lambda df: df.groupby(['url']).cumcount() + 1)
         )
@@ -299,19 +299,19 @@ def send_tags(tags):
 def persist_tags(tags_df):
     """ Save tags to database through the REST API """
     # API is designed to handle one article at a time. We've got a lot. possibly want to batch in large batches to save round trip
-    print(f"\nFound {len(tags_df.article_id.unique())} articles to autotag")
+    print(f"\nFound {len(tags_df.id.unique())} articles to autotag")
 
     tags_df = tags_df.drop(['url', 'rank'], axis=1)
     # print(tags_df)
 
     results = []
-    for articleId in tqdm(tags_df.article_id.unique().tolist()):
+    for articleId in tqdm(tags_df.id.unique().tolist()):
         result = {
             'articleId': articleId,
             'userId': 5,
             'tags': []
         }
-        for tagrow in tags_df.query('article_id == @articleId').itertuples():
+        for tagrow in tags_df.query('id == @articleId').itertuples():
             result['tags'] += [{'name': tagrow.keyword, 'weight': tagrow.tfidf_weight}]
         
         results += [result]
