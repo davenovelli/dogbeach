@@ -1,0 +1,8 @@
+nltk
+pandas
+pickleshare
+pymysql
+pyyaml
+requests
+scikit-learn
+tqdm
