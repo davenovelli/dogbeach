@@ -1,0 +1,5 @@
+CREATE_ENDPOINT: "http://localhost:8081/tag"
+HOST: 'hostname.us-west-2.rds.amazonaws.com'
+USER: 'username'
+PASSWORD: 'password'
+DATABASE: 'database_name'

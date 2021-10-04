@@ -35,6 +35,19 @@ APOSTROPHE_TERMS = pd.read_csv('./apostrophe_terms_to_save.txt').term.tolist()
 # When generating tags in "update" mode, how many weeks back should we go to potentially change the tags?
 UPDATE_HISTORY_WEEKS = 8
 
+# Read in the config file
+with open("config.yml", "r") as ymlfile:
+    config = yaml.load(ymlfile, Loader=yaml.FullLoader)
+
+# What is the API endpoint
+CREATE_ENDPOINT = config['CREATE_ENDPOINT']
+
+# RDS connection strings
+HOST = config['HOST']
+USER = config['USER']
+PASSWORD = config['PASSWORD']
+DATABASE = config['DATABASE']
+
 
 def parse_args():
     """ Specify the command line arguments to accept """
@@ -82,11 +95,6 @@ def pre_process(text):
 
 def get_articles():
     """ Either, by querying or by reading a file that was previously saved """
-    HOST = 'yew-review-test.c2usv7nad3n6.us-west-2.rds.amazonaws.com'
-    USER = 'admin'
-    PASSWORD = 'Y3wR3view9!'
-    DATABASE = 'yewreview'
-
     print("Getting articles from the database")
 
     allArticlesQuery = """
@@ -275,9 +283,6 @@ def send_tags(tags):
     """ """
     import json
     import requests
-
-    # What is the API endpoint
-    CREATE_ENDPOINT = "http://localhost:8081/tag"
 
     for tag in tqdm(tags):
         header = { "Content-Type": "application/json" }
