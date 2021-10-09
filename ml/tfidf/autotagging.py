@@ -1,10 +1,13 @@
 ##
 # This script is used to automatically tag all new articles using an existing tfidf model
 ##
+import json
 import pandas as pd
 import pickle
 import pymysql
-import re
+import requests
+import yaml
+
 from tqdm import tqdm
 
 import os
@@ -13,13 +16,13 @@ dname = os.path.dirname(abspath)
 os.chdir(dname)
 
 # Default mode (all, new, or update)
-MODE = 'new'
+MODE = 'update'
 
 # Load data from file instead of re-generating?
 LOAD_DATA = False
 
 # Should we regenerate the model, or just use the existing one?
-REGENERATE_MODEL = False
+REGENERATE_MODEL = True
 
 # Model Generation paramters
 MIN_ARTICLE_LENGTH = 1000
@@ -66,12 +69,14 @@ def process_apostrophe_terms(df):
     """ There are several dozen terms (primarily Irish and Hawaiian names) that contain apostrophes that we don't
     want to be truncated during tokenization. For those specific terms, remove the apostrophes ahead of time
     """
+    total_replaced = 0
     for term in APOSTROPHE_TERMS:
         new_term = term.replace("'", '')
-        print(f"---------------------------------------------\nreplacing {term} with { new_term }")
         df['text'] = df.text.str.replace(term, new_term)
-        print(df[df.text.str.contains(term)].head())
-        print(df[df.text.str.contains(new_term)].head())
+        replace_count = df[df.text.str.contains(new_term)].shape[0]
+        total_replaced += df[df.text.str.contains(new_term)].shape[0]
+        print(f"---------------------------------------------\nreplaced {term} with { new_term } {replace_count} times")
+    print(f"A total of {total_replaced} apostrophes were replaced")
     print("\ndone.\n")
     return df
 
@@ -104,8 +109,9 @@ def get_articles():
 """
     print(allArticlesQuery)
     
+    connection = None
     try:
-        connection = pymysql.connect(HOST, USER, PASSWORD, DATABASE)
+        connection = pymysql.connect(host=HOST, user=USER, password=PASSWORD, database=DATABASE)
         if LOAD_DATA:
             df = pd.read_csv('./latest_articles_to_model_df.csv')
         else:
@@ -139,7 +145,8 @@ def get_articles():
         
         print(f"There are {df.shape[0]} total articles to work with")
     finally:
-        connection.close()
+        if connection:
+            connection.close()
 
     print(df)
     print("Done getting articles.")
@@ -170,7 +177,7 @@ def generate_model(df):
     # Only use articles with at least MIN_ARTICLE_LENGTH characters, and only use the most recent MAX_RECENT_ARTICLES of those
     train_df = (
         df
-        .query('text.str.len() > @MIN_ARTICLE_LENGTH')
+        .query('text.str.len() > @MIN_ARTICLE_LENGTH', engine='python')
         .sort_values('feedDate')
         .iloc[:MAX_RECENT_ARTICLES]
     )
@@ -280,14 +287,11 @@ def process_results(df_idf, cv, tfidf_transformer):
 
 
 def send_tags(tags):
-    """ """
-    import json
-    import requests
-
+    """ Send tags for each article to Yew Review API """
     for tag in tqdm(tags):
         header = { "Content-Type": "application/json" }
         json_data = json.dumps(tag, default=str)
-        print(json_data)
+        # print(json_data)
         
         r = requests.post(CREATE_ENDPOINT, headers=header, data=json_data)
         try:
@@ -345,7 +349,7 @@ def generate_tags(df):
     persist_tags(article_tags)
 
 
-if __name__ == '__main__':    
+if __name__ == '__main__':
     args = parse_args()
     if args.mode:
         MODE = args.mode
