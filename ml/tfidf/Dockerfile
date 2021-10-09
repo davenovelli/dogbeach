@@ -4,20 +4,7 @@ FROM ubuntu:18.04
 RUN apt-get update \
     && apt-get -y install software-properties-common \
     && add-apt-repository ppa:deadsnakes/ppa \
-    && apt-get -y install wget git python3.8
-
-# Checkout the repo
-RUN git clone https://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@github.com/davenovelli/dogbeach.git
-
-# Move into the repo directory
-WORKDIR "/dogbeach"
-
-# Delete everything in the root dir except the /ml directory
-#RUN find . ! -name 'ml' -type d -exec rm -rf {} +
-RUN ls -Q | grep -v ml | xargs rm -rf
-
-# Switch to the tagging code directory
-WORKDIR "/dogbeach/ml/tfidf"
+    && apt-get -y install wget python3.8
 
 # Copy the config file in as a secret
 RUN --mount=type=secret,id=config cp /run/secrets/config config.yml
@@ -33,16 +20,18 @@ RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86
     find /opt/conda/ -follow -type f -name '*.a' -delete && \
     find /opt/conda/ -follow -type f -name '*.js.map' -delete
 
-### TEMP FOR TESTING, THESE WILL COME FROM GITHUB #########################
-ADD autotagging.py .
-ADD requirements.txt .
-
 # Install dependencies
+ADD requirements.txt .
 RUN /opt/conda/bin/conda install --file requirements.txt
 
 # Cleanup conda environment to save space
 RUN /opt/conda/bin/conda clean -afy && \
     /opt/conda/bin/conda clean -pfy
+
+# Copy over the script and support files
+ADD apostrophe_terms_to_save.txt .
+ADD autotagging.py .
+ADD stopwords.txt .
 
 # Launch
 EXPOSE 80
