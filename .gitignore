@@ -5,9 +5,11 @@ util/__pycache*
 *.pyc
 *.csv
 !*/*/alltags_ordered.csv
+!*/published_tags.csv
 *.db
 dogbeach/__pycache__
 .ipynb_checkpoints
 .vscode
 config.yml
 *.pickle
+
