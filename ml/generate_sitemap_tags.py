@@ -1,6 +1,7 @@
 import os
 import sys
 import pandas as pd
+import urllib
 
 ##################################### Config
 os.chdir(os.path.dirname(sys.argv[0]))
@@ -18,7 +19,8 @@ url_template = """  <url>
     <changefreq>weekly</changefreq>
   </url>"""
 
-formatted = "\n".join([url_template.format(tag) for tag in df.tag.values])
+encoded = [urllib.parse.quote(tag) for tag in df.tag.values]
+formatted = "\n".join([url_template.format(tag) for tag in encoded])
 sitemap = sitemap_template.format(formatted)
 
 print(df)
