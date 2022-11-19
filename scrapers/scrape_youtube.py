@@ -49,6 +49,9 @@ RESULTS_PER_PAGE = config['youtube']['videos_per_page']  # youtube does not perm
 # Maximum number of empty pages to load before quitting
 MAX_EMPTY_PAGES = config['youtube']['max_empty_pages']
 
+# Google API Key
+GOOGLE_API_KEY = config['youtube']['api_key']
+
 # The minimum length of a video to scrape
 MIN_VIDEO_DURATION = 3 * 60
 
@@ -72,7 +75,7 @@ def get_youtube():
 
     # Establish the service object
     if YOUTUBE is None:
-        YOUTUBE = googleapiclient.discovery.build("youtube", "v3", developerKey='AIzaSyBFN6xIuoulmTiHFcT2DRHAkYxTNH1NKNc')
+        YOUTUBE = googleapiclient.discovery.build("youtube", "v3", developerKey=GOOGLE_API_KEY)
     
     return YOUTUBE
 

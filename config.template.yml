@@ -6,6 +6,7 @@ common:
     system_user_id: -1
     browser_id: '00000000-0000-0000-0000-000000000000'
     agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.150 Safari/537.36'
+
 magicseaweed.com:
     base_url: "https://magicseaweed.com"
     new_only: True
@@ -38,3 +39,4 @@ theinertia:
 youtube:
     videos_per_page: 50
     max_empty_pages: 3
+    api_key: 'abcdefghijklmnopqrstuvwxyz0123456789'
