@@ -146,6 +146,10 @@ def extract_video_data(video_json):
 def parse_duration_in_seconds(duration_string):
     """ Parse the ISOxxxx duration string returned by the Youtube API into seconds
     """
+    if duration_string == 'P0D':
+        # This is a livestream and the duration is not specified. Assume it is longer than minimum length!
+        return 60 * 60
+    
     day_time = duration_string.split('T')
     day_duration = day_time[0].replace('P', '')
     
