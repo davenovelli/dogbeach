@@ -1,0 +1,60 @@
+# Edit this file to introduce tasks to be run by cron.
+# 
+# Each task to run has to be defined through a single line
+# indicating with different fields when the task will be run
+# and what command to run for the task
+# 
+# To define the time you can provide concrete values for
+# minute (m), hour (h), day of month (dom), month (mon),
+# and day of week (dow) or use '*' in these fields (for 'any').# 
+# Notice that tasks will be started based on the cron's system
+# daemon's notion of time and timezones.
+# 
+# Output of the crontab jobs (including errors) is sent through
+# email to the user the crontab file belongs to (unless redirected).
+# 
+# For example, you can run a backup of all your user accounts
+# at 5 a.m every week with:
+# 0 5 * * 1 tar -zcf /var/backups/home.tgz /home/
+# 
+# For more information see the manual pages of crontab(5) and cron(8)
+# 
+# m h  dom mon dow   command
+
+# Scraping for new articles #
+#############################
+
+# Magicseaweed.com
+#* * * * * . /home/ubuntu/.cron_profile; /home/ubuntu/miniconda3/envs/dogbeach/bin/python /home/ubuntu/dogbeach/scrapers/scrape_magicseaweed.py >> /home/ubuntu/dogbeach/log/magicseaweed.debug.log 2>&1
+11 */4 * * * . /home/ubuntu/.cron_profile; /home/ubuntu/miniconda3/envs/dogbeach/bin/python /home/ubuntu/dogbeach/scrapers/scrape_magicseaweed.py >> /home/ubuntu/dogbeach/log/magicseaweed.cron.log 2>&1
+
+# Surfer.com
+#* * * * * . /home/ubuntu/.cron_profile; /home/ubuntu/miniconda3/envs/dogbeach/bin/python /home/ubuntu/dogbeach/scrapers/scrape_surfer.com.py >> /home/ubuntu/dogbeach/log/surfer.com.debug.log 2>&1
+11 1-23/4 * * * . /home/ubuntu/.cron_profile; /home/ubuntu/miniconda3/envs/dogbeach/bin/python /home/ubuntu/dogbeach/scrapers/scrape_surfer.com.py >> /home/ubuntu/dogbeach/log/surfer.com.cron.log 2>&1
+
+# Surfd.com
+#* * * * * . /home/ubuntu/.cron_profile; /home/ubuntu/miniconda3/envs/dogbeach/bin/python /home/ubuntu/dogbeach/scrapers/scrape_surfd.com.py >> /home/ubuntu/dogbeach/log/surfd.com.debug.log 2>&1
+11 2-23/4 * * * . /home/ubuntu/.cron_profile; /home/ubuntu/miniconda3/envs/dogbeach/bin/python /home/ubuntu/dogbeach/scrapers/scrape_surfd.com.py >> /home/ubuntu/dogbeach/log/surfd.com.cron.log 2>&1
+
+# The Inertia
+#* * * * * . /home/ubuntu/.cron_profile; /home/ubuntu/miniconda3/envs/dogbeach/bin/python /home/ubuntu/dogbeach/scrapers/scrape_theinertia.py >> /home/ubuntu/dogbeach/log/theinertia.debug.log 2>&1
+11 3-23/4 * * * . /home/ubuntu/.cron_profile; /home/ubuntu/miniconda3/envs/dogbeach/bin/python /home/ubuntu/dogbeach/scrapers/scrape_theinertia.py >> /home/ubuntu/dogbeach/log/theinertia.cron.log 2>&1
+
+# Surfline.com
+#* * * * * . /home/ubuntu/.cron_profile; /home/ubuntu/miniconda3/envs/dogbeach/bin/python /home/ubuntu/dogbeach/scrapers/scrape_surfline.py >> /home/ubuntu/dogbeach/log/surfline.debug.log 2>&1
+22 */4 * * * . /home/ubuntu/.cron_profile; /home/ubuntu/miniconda3/envs/dogbeach/bin/python /home/ubuntu/dogbeach/scrapers/scrape_surfline.py >> /home/ubuntu/dogbeach/log/surfline.cron.log 2>&1
+
+# Youtube Channels
+#* * * * * . /home/ubuntu/.cron_profile; /home/ubuntu/miniconda3/envs/dogbeach/bin/python /home/ubuntu/dogbeach/scrapers/scrape_youtube.py >> /home/ubuntu/dogbeach/log/youtube.debug.log 2>&1
+22 1-23/4 * * * . /home/ubuntu/.cron_profile; /home/ubuntu/miniconda3/envs/dogbeach/bin/python /home/ubuntu/dogbeach/scrapers/scrape_youtube.py >> /home/ubuntu/dogbeach/log/youtube.cron.log 2>&1
+
+# Stabmag
+#* * * * * . /home/ubuntu/.cron_profile; /home/ubuntu/miniconda3/envs/dogbeach/bin/python /home/ubuntu/dogbeach/scrapers/scrape_stabmag.py >> /home/ubuntu/dogbeach/log/stabmag.debug.log 2>&1
+#11 */4 * * * . /home/ubuntu/.cron_profile; /home/ubuntu/miniconda3/envs/dogbeach/bin/python /home/ubuntu/dogbeach/scrapers/scrape_stabmag.py >> /home/ubuntu/dogbeach/log/stabmag.cron.log 2>&1
+
+
+
+# A test cron job to output to a log file every minute
+#######################################################
+#* * * * * env > /home/ubuntu/dogbeach/log/env.output
+#* * * * * /home/ubuntu/miniconda3/envs/dogbeach/bin/python /home/ubuntu/dogbeach/crontest.py >> /home/ubuntu/dogbeach/log/crontest.log 2>&1
