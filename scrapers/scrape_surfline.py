@@ -159,9 +159,23 @@ def extract_article(page, post):
 
         article_video = [v.find("iframe")["src"] for v in soup.select(".video-wrap") if v.find("iframe") is not None] # ["https://www.youtube.com/embed/nF2y6MjpOQ4?feature=oembed"]
 
-        content = ". ".join([p.get_text(strip=True) for p in soup.select("div#sl-editorial-article-body")[0].select("p.p1") if len(p.get_text(strip=True)) > 0]).replace('..', '.') # or "\n".join(...)
-        if not len(content):
-            content = ". ".join([p.get_text(strip=True) for p in soup.select("div#sl-editorial-article-body")[0].select("p") if len(p.get_text(strip=True)) > 0]).replace('..', '.')
+        if len(soup.select("div#sl-editorial-article-body")) > 0:
+            # We have a standard page, pull out the text in the normal div
+            content = ". ".join([p.get_text(separator="\n", strip=True) for p in soup.select("div#sl-editorial-article-body")[0].select("p.p1") if len(p.get_text(strip=True)) > 0]).replace('..', '.') # or "\n".join(...)
+            if not len(content):
+                content = ". ".join([p.get_text(separator="\n", strip=True) for p in soup.select("div#sl-editorial-article-body")[0].select("p") if len(p.get_text(strip=True)) > 0]).replace('..', '.')
+        elif len(soup.findAll("header", {"data-testid": "travel-zone-navbar"})) > 0:
+            # We have a special "travel guide" page, extracting the content on this one will take some extra work
+            sections = [
+                soup.find("section", {"data-testid": "travel-hero"}),
+                soup.find("section", {"data-testid": "surf-zone"}),
+                soup.find("section", {"data-testid": "travel-interview"}),
+                soup.find("section", {"data-testid": "travel-zone-when-to-score"}),
+                soup.find("section", {"data-testid": "travel-local-knowledge"}),
+                soup.find("section", {"data-testid": "travel-essentials"}),
+                soup.find("section", {"data-testid": "spaghetti-time"})
+            ]
+            content = "\n\n".join([s.get_text(separator="\n", strip=True) for s in sections if s])
 
         # Build full tags list from the categories, series, and existing tags
         categories = [c["name"] for c in post["categories"]]
