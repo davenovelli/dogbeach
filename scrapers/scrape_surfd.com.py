@@ -120,7 +120,7 @@ def load_already_scraped_articles():
     urls_json = r.json()
     already_scraped = set([x['url'] for x in urls_json])
 
-    skip_filename = Path(f'data/{PUBLISHER}/skips.txt')
+    skip_filename = Path(f'../data/{PUBLISHER}/skips.txt')
     directory = os.path.dirname(skip_filename)
     if not os.path.exists(directory):
         os.makedirs(directory)

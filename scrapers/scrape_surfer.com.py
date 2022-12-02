@@ -147,7 +147,7 @@ def load_already_scraped_articles():
     urls_json = r.json()
     already_scraped = set([x['url'] for x in urls_json])
 
-    with open(f'data/{PUBLISHER}/skips.txt', 'r') as skips_file:
+    with open(f'../data/{PUBLISHER}/skips.txt', 'r') as skips_file:
       SKIPS = list(map(str.strip, skips_file.readlines()))
       # print(SKIPS)
     
@@ -297,7 +297,7 @@ def extract_article_list(post_source):
 
     if '30-days-giveaways' in url:
       print(f"All of these are broken for some reason: {url}")
-      with open('data/surfer.com/skips.txt', "a") as skips:
+      with open('../data/surfer.com/skips.txt', "a") as skips:
         skips.write(f"{url}\n")
       continue
 
@@ -378,7 +378,7 @@ def scrape_article(article):
       get_logger().error(f"This url redirected to something other than the expected URL ({current_url}), so it's probably a dead page\n")
 
       # Save this bad url so we don't try to scrape it again
-      with open('data/surfer.com/skips.txt', "a") as skips:
+      with open('../data/surfer.com/skips.txt', "a") as skips:
         skips.write(f"{article['url']}\n")
       
       return
@@ -394,7 +394,7 @@ def scrape_article(article):
       get_logger().error(f"Broken content found at {article['url']}, adding to the skip list...")
       get_logger().info(f"Broken content:\n{article_soup}")
       
-      with open('data/surfer.com/skips.txt', "a") as skips:
+      with open('../data/surfer.com/skips.txt', "a") as skips:
         skips.write(f"{article['url']}\n")
       
       return

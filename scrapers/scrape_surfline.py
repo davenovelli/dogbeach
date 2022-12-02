@@ -199,7 +199,7 @@ def scrape():
     """
     offset = config[PUBLISHER]['offset']
 
-    df = pd.read_csv(f"data/{PUBLISHER}/alltags_ordered.csv", header=None)
+    df = pd.read_csv(f"../data/{PUBLISHER}/alltags_ordered.csv", header=None)
     ranked_categories = [row[0] for index,row in df.iterrows()]
 
     empty_pages = 0
