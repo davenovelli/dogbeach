@@ -224,7 +224,7 @@ def extract_link_data(link):
     sleep(4)
 
     get_logger().debug("getting page source from driver")
-    source = get_driver().clean_unicode(get_driver().driver.page_source)
+    source = doglog.clean_unicode(get_driver().driver.page_source)
     sleep(1)
 
     sel = Selector(text=source)
@@ -338,7 +338,7 @@ def extract_new_links():
                 break
 
         # Get all links
-        source = get_driver().clean_unicode(get_driver().driver.page_source)
+        source = doglog.clean_unicode(get_driver().driver.page_source)
         sel = Selector(text=source)
         cat_links = sel.xpath("*//div[@class='block block-72 tipi-flex']//div[@class='title-wrap']/h3/a/@href").extract()
         if len(cat_links) == 0:

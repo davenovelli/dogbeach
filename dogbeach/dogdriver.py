@@ -49,6 +49,7 @@ class DogDriver:
         # the current directory
         currdir = os.path.dirname(os.path.realpath(__file__)) + "/{}"
         if "linux" in platform:
+            options.binary_location = '/home/ubuntu/.cache/ms-playwright/chromium-1033/chrome-linux/chrome'
             return webdriver.Chrome(chrome_options=options, executable_path=currdir.format("chromedriver_linux"))
         else:
             return webdriver.Chrome(chrome_options=options, executable_path=currdir.format("chromedriver"))
@@ -86,22 +87,6 @@ class DogDriver:
         newsleep = s + max(int(self.backoff * s), 1)
 
         return self.get_url(url, newsleep, t - 1)
-
-    @staticmethod
-    def clean_unicode(source):
-        """Clean unhelpful unicode characters out of scraped page content before saving
-
-        :param content: Page source from a scraped url
-        :return: cleaned up source
-        """
-        return source \
-            .replace('\u201c', '"') \
-            .replace('\u201d', '"') \
-            .replace('\u2018', "'") \
-            .replace('\u2019', "'") \
-            .replace('\u00a0', " ") \
-            .replace('\u2013', '-') \
-            .replace('\u2014', '-')
 
 
 if __name__ == "__main__":

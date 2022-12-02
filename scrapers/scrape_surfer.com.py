@@ -170,7 +170,7 @@ def get_page_source(endpoint):
     raw_source = unescape(raw_source, html_unescape_table)
     
     # Handle know unicode character problems
-    source = get_driver().clean_unicode(raw_source)
+    source = doglog.clean_unicode(raw_source)
 
     return source
 
@@ -384,7 +384,7 @@ def scrape_article(article):
       return
     
     # Cleanup the article source
-    source = get_driver().clean_unicode(get_driver().driver.page_source)
+    source = doglog.clean_unicode(get_driver().driver.page_source)
     
     # There are different formats/html structure so figure out which we're dealing with
     article_soup = BeautifulSoup(source, "html.parser")
