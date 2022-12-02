@@ -14,6 +14,8 @@ from requests import Timeout
 from bs4 import BeautifulSoup
 from time import sleep, strftime
 from dateutil.parser import parse
+from scrapy.selector import Selector
+from playwright.sync_api import sync_playwright
 
 
 # Config
@@ -38,6 +40,9 @@ REST_API_PORT = config['common']['rest_api']['port']
 REST_API_URL = f"{REST_API_PROTOCOL}://{REST_API_HOST}:{REST_API_PORT}"
 CREATE_ENDPOINT = f"{REST_API_URL}/article"
 PUBLISHER_ARTICLES_ENDPOINT = f"{REST_API_URL}/articleUrlsByPublisher?publisher={PUBLISHER}"
+
+# User Agent to use for the requests
+AGENT = config['common']['agent']
 
 # UserID and BrowswerID are required fields for creating articles, this User is the ID tied to the system account
 SYSTEM_USER_ID = config['common']['system_user_id']
@@ -127,18 +132,20 @@ def create_article(article):
 ################################################################################
 
 @retry(Timeout, tries=6, delay=3, backoff=1.4, max_delay=30)
-def extract_article(post):
-    article_id = post["id"]
+def extract_article(page, post):
+    """
+    :param page: the playwright page object used to load the url
+    :param post: a dict containing the content already extracted from the category page
+    :return: a dict containing all the data extracted from the page
+    """
     permalink = post["permalink"].replace('#038;', '')
-
     get_logger().info(f"extracting: {permalink}")
 
-    url = f'https://www.surfline.com/surf-news/{article_id}'
-    r = requests.get(url, timeout=None)
-    status_code = r.status_code
+    r = page.goto(permalink)
+    sleep(2)
 
-    if status_code == 200:
-        soup = BeautifulSoup(r.text, "lxml")
+    if r.status == 200:
+        soup = BeautifulSoup(doglog.clean_unicode(r.text()), "lxml")
 
         if post["media"]["type"] == "image":
             thumbnail = post["media"]["feed1x"].replace('https://', '')
@@ -177,7 +184,7 @@ def extract_article(post):
         get_logger().debug(pprint.pformat(article_json, sort_dicts=False, width=200))
         return article_json
     else:
-        get_logger().error(f"Error: {status_code} status retrieving page")
+        get_logger().error(f"Error: {r.status} status retrieving page: {permalink}")
         return None
 
 def scrub_url(url):
@@ -194,6 +201,12 @@ def scrub_url(url):
     print(scrubbed)
     return scrubbed
 
+def abort_or_continue(route, request):
+    if request.resource_type in ['document']:
+        route.continue_()
+    else:
+        route.abort()
+
 def scrape():
     """ Main function driving the scraping process
     """
@@ -203,70 +216,81 @@ def scrape():
     ranked_categories = [row[0] for index,row in df.iterrows()]
 
     empty_pages = 0
-    while(1):
-        get_logger().debug(f"Grabbing next {LIMIT} articles starting at offset {offset}")
-        r = requests.get(f'https://www.surfline.com/wp-json/sl/v1/taxonomy/posts/category?limit={LIMIT}&offset={offset}', timeout=None) # timeout=None # for slowest sites, most stable
-        data = r.json()
-        sleep(2)
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(user_agent=AGENT)
+        page = context.new_page()
+        page.route('**/*', lambda route, request: abort_or_continue(route, request))
 
-        if data != None:
-            posts = data["posts"]
+        while(1):
+            get_logger().debug(f"Grabbing next {LIMIT} articles starting at offset {offset}")
+            url = f'https://www.surfline.com/wp-json/sl/v1/taxonomy/posts/category?limit={LIMIT}&offset={offset}'
+            page.goto(url)
+            sleep(2)
 
-            new_articles_found = 0
-            for i in range(len(posts)): # = limit for all the iterations, except last one
-                post = posts[i]
+            source = doglog.clean_unicode(page.content())
+            sel = Selector(text=source)
+            json_str = sel.xpath("*//pre//text()").extract_first()
+            data = json.loads(json_str)
 
-                # There appear to be promos from other sites (worldsurfleague.com is one I found) and we don't want to include that
-                if 'surfline.com' not in post['permalink']:
-                    continue
+            if data != None:
+                posts = data["posts"]
 
-                if 'utm' in post['permalink']:
-                    post['permalink'] = scrub_url(post['permalink'])
-                if post['permalink'] in already_scraped:
-                    continue
+                new_articles_found = 0
+                for i in range(len(posts)): # = limit for all the iterations, except last one
+                    post = posts[i]
 
-                premium = post["premium"]
-                categories = [c["name"] for c in post["categories"]]
-                series = [s["name"] for s in post["series"]]
-                tags = set(categories)
-                tags.update(set(series))
-
-                # Find the highest ranked tag that is present for this article
-                category = None
-                for cat in ranked_categories:
-                    if cat in tags:
-                        category = cat
-                        break
-                
-                # If we didn't find any tag in the rankings, choose the first category
-                if category == None:
-                    category = list(tags)[0]
-
-                # Set the category for the post
-                post['category'] = category
-
-                # If the article is premium or not in English then skip it
-                if premium == False and len(tags.intersection({"Español", "Português", "Premium"})) == 0:
-                    article = extract_article(post)
-                    if article is None:
+                    # There appear to be promos from other sites (worldsurfleague.com is one I found) and we don't want to include that
+                    if 'surfline.com' not in post['permalink']:
                         continue
 
-                    create_article(article)
-                    new_articles_found += 1
-        else:
-            return
-        
-        # Keep track of if we should stop due to no new articles found...
-        if new_articles_found > 1:
-            empty_pages = 0
-        else:
-            empty_pages += 1
-            if empty_pages >= MAX_EMPTY_PAGES:
-                get_logger().info("Max number of empty pages reached, quitting.")
+                    if 'utm' in post['permalink']:
+                        post['permalink'] = scrub_url(post['permalink'])
+                    if post['permalink'] in already_scraped:
+                        continue
+
+                    premium = post["premium"]
+                    categories = [c["name"] for c in post["categories"]]
+                    series = [s["name"] for s in post["series"]]
+                    tags = set(categories)
+                    tags.update(set(series))
+
+                    # Find the highest ranked tag that is present for this article
+                    category = None
+                    for cat in ranked_categories:
+                        if cat in tags:
+                            category = cat
+                            break
+                    
+                    # If we didn't find any tag in the rankings, choose the first category
+                    if category == None:
+                        category = list(tags)[0]
+
+                    # Set the category for the post
+                    post['category'] = category
+
+                    # If the article is premium or not in English then skip it
+                    if premium == False and len(tags.intersection({"Español", "Português", "Premium"})) == 0:
+                        article = extract_article(page, post)
+                        if article is None:
+                            continue
+
+                        create_article(article)
+                        new_articles_found += 1
+            else:
                 return
-        
-        # Update to get the next page worth of articles
-        offset += LIMIT
+            
+            # Keep track of if we should stop due to no new articles found...
+            if new_articles_found > 1:
+                empty_pages = 0
+            else:
+                empty_pages += 1
+                if empty_pages >= MAX_EMPTY_PAGES:
+                    get_logger().info("Max number of empty pages reached, quitting.")
+                    return
+            
+            # Update to get the next page worth of articles
+            offset += LIMIT
 
 if __name__ == '__main__':
     # Query all the urls already scraped for this publisher
