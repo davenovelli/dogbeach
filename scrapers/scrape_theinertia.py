@@ -164,7 +164,7 @@ def find_unscraped_articles():
           get_logger().debug("Scraping category page: {}".format(cat_page_url))
           get_driver().get_url(cat_page_url)
           raw_source = get_driver().driver.page_source
-          source = get_driver().clean_unicode(raw_source)
+          source = doglog.clean_unicode(raw_source)
 
           # build a list of all articles on this page that haven't been scraped yet
           page_articles = extract_article_list(cat, source)
@@ -288,7 +288,7 @@ def scrape_article(article):
         # We'll just have to skip this url, can't load it even with retries
         return
     
-    source = get_driver().clean_unicode(get_driver().driver.page_source)
+    source = doglog.clean_unicode(get_driver().driver.page_source)
     if 'ERROR 404' in source:
         get_logger().debug("Skipping (url is a 404) - {}".format(article['url']))
         return

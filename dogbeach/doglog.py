@@ -33,3 +33,18 @@ def setup_logger(name, log_file, flevel=logging.WARNING, clevel=logging.WARNING)
     logger.addHandler(ch)
 
     return logger
+
+def clean_unicode(source):
+    """Clean unhelpful unicode characters out of scraped page content before saving
+
+    :param content: Page source from a scraped url
+    :return: cleaned up source
+    """
+    return source \
+        .replace('\u201c', '"') \
+        .replace('\u201d', '"') \
+        .replace('\u2018', "'") \
+        .replace('\u2019', "'") \
+        .replace('\u00a0', " ") \
+        .replace('\u2013', '-') \
+        .replace('\u2014', '-')
