@@ -71,9 +71,6 @@ RETRIES = config[PUBLISHER]['retries'] if 'retries' in config[PUBLISHER] else No
 # How long to wait before giving up on a page load
 PAGELOAD_TIMEOUT = config[PUBLISHER]['page_load_timeout'] if 'page_load_timeout' in config[PUBLISHER] else None
 
-# How many articles should we load for each "page" from The Inertia's API?
-ARTICLES_PER_PAGE = config[PUBLISHER]['articles_per_page']
-
 # We want all times to be in westcoast time
 WESTCOAST = pytz.timezone('US/Pacific')
 
@@ -138,11 +135,7 @@ def load_already_scraped_articles():
 
 
 def find_unscraped_articles():
-  """ This scraper uses an endpoint that controls the paging, but it doesn't exactly match the surf main page. It's
-    close enough that I feel pretty good about it
-
-    Categories: Films (broken), Surf, Mountain (skip), Enviro, Health, Photo, Arts, Travel, Women
-  """
+  """Walk public category archives until consecutive pages contain no new stories."""
   get_logger().debug("Starting scrape...")
   all_articles_list = []
   for cat, catnum in CATEGORIES.items():
@@ -230,6 +223,9 @@ def extract_articles(articles):
   """
   # Load each article and extract the rest of the data
   for article in articles:
+    # A new story can be discovered in several categories before any are submitted.
+    if article['url'].rstrip('/').split('/')[-1] in already_scraped:
+        continue
     article = scrape_article(article)
     
     # Send the article data to the REST API...
@@ -478,7 +474,6 @@ def create_article(article):
       already_scraped.add(article['url'].rstrip('/').split('/')[-1])
     except Exception as ex:
       get_logger().error(f"Article submission failed ({r.status_code}): {article['url']}")
-      raise
 
 @atexit.register
 def cleanup():

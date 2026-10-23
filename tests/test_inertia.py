@@ -40,3 +40,25 @@ class InertiaTests(unittest.TestCase):
         self.assertIsNone(current_article(BeautifulSoup('<main>Missing article</main>', 'html.parser')))
         rows = extract_cards('surf', '<article class="card"><a href="/surf/story/">Story</a><img src="javascript:bad()"></article>')
         self.assertIsNone(rows[0]['thumb'])
+
+
+class InertiaScraperFlowTests(unittest.TestCase):
+    def test_new_story_in_several_categories_is_scraped_and_submitted_once(self):
+        # Load just the orchestration function; avoid config and browser side effects.
+        import ast
+        from pathlib import Path
+        source = Path('scrapers/scrape_theinertia.py').read_text()
+        function = next(node for node in ast.parse(source).body if isinstance(node, ast.FunctionDef) and node.name == 'extract_articles')
+        scraped, submitted, known = [], [], set()
+        def scrape(article):
+            scraped.append(article['url'])
+            return article
+        def create(article):
+            submitted.append(article['url'])
+            known.add(article['url'].rstrip('/').split('/')[-1])
+        env = {'already_scraped': known, 'scrape_article': scrape, 'create_article': create}
+        exec(compile(ast.Module(body=[function], type_ignores=[]), '<scraper flow>', 'exec'), env)
+        env['extract_articles']([{'url': 'https://www.theinertia.com/surf/story'},
+                                 {'url': 'https://www.theinertia.com/women/story'}])
+        self.assertEqual(len(scraped), 1)
+        self.assertEqual(len(submitted), 1)
