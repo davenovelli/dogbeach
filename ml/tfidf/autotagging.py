@@ -5,7 +5,10 @@ import json
 import pandas as pd
 import pickle
 import pymysql
-import requests
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from dogbeach.api import ApiClient
 import yaml
 
 from tqdm import tqdm
@@ -44,6 +47,8 @@ with open("config.yml", "r") as ymlfile:
 
 # What is the API endpoint
 CREATE_ENDPOINT = config['CREATE_ENDPOINT']
+API = ApiClient(CREATE_ENDPOINT, {'common': {'api_token': config.get('SCRAPER_API_TOKEN')}})
+SCRAPER_USER_ID = int(os.environ.get('SCRAPER_USER_ID') or config['SCRAPER_USER_ID'])
 
 # RDS connection strings
 HOST = config['HOST']
@@ -293,7 +298,7 @@ def send_tags(tags):
         json_data = json.dumps(tag, default=str)
         # print(json_data)
         
-        r = requests.post(CREATE_ENDPOINT, headers=header, data=json_data)
+        r = API.post(CREATE_ENDPOINT, headers=header, data=json_data)
         try:
             r.raise_for_status()
         except Exception as ex:
@@ -312,7 +317,7 @@ def persist_tags(tags_df):
     for articleId in tqdm(tags_df.id.unique().tolist()):
         result = {
             'articleId': articleId,
-            'userId': 5,
+            'userId': SCRAPER_USER_ID,
             'tags': []
         }
         for tagrow in tags_df.query('id == @articleId').itertuples():
