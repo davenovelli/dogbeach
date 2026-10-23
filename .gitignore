@@ -13,3 +13,7 @@ dogbeach/__pycache__
 config.yml
 *.pickle
 
+
+config.local.yml
+log/
+.dev/
