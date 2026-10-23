@@ -6,3 +6,11 @@ log
 data
 __pycache__
 *.pickle
+
+**/config.yml
+**/config.local.yml
+**/.env*
+**/*.pem
+**/*.key
+**/*.pickle
+**/*.csv
