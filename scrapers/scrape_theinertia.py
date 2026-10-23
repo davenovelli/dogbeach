@@ -29,6 +29,7 @@ with open("../config.yml", "r") as ymlfile:
 sys.path.append('..')
 from dogbeach import doglog
 from dogbeach.dogdriver import DogDriver
+from dogbeach.inertia import extract_cards, current_article
 
 _logger = None
 _driver = None
@@ -76,19 +77,11 @@ ARTICLES_PER_PAGE = config[PUBLISHER]['articles_per_page']
 # We want all times to be in westcoast time
 WESTCOAST = pytz.timezone('US/Pacific')
 
-# The url for a specific page of a specific category
-SURFCAT_URL = 'https://www.theinertia.com/wp-content/themes/theinertia-2014/quick-ajax.php' \
-              + '?action=recent_posts&category={}&curated_list=false&paged=1&num={}'
-
-# The list of categories and codes we're interested in scraping
+# Public category archives replaced the retired quick-ajax.php endpoint in 2026.
+SURFCAT_URL = 'https://www.theinertia.com/category/{}/{}'
 CATEGORIES = {
-    'art': 10,
-    'surf': 20,
-    'health': 21,
-    'enviro': 22,
-    'travel': 23,
-    'photos': 494,
-    'women': 32700
+    'art': 'music-art', 'surf': 'surf', 'health': 'health',
+    'enviro': 'environment', 'travel': 'travel', 'women': 'women'
 }
 
 # How many pages of articles that we've already scraped fully should we try before quitting?
@@ -98,8 +91,8 @@ MAX_EMPTY_PAGES = config[PUBLISHER]['max_empty_pages']
 already_scraped = set()
 
 # A regex used to clean up some of the extracted text
-video_regex = re.compile('Volume \d+%.+')
-more_videos_regex = re.compile('More Videos\d+:.+')
+video_regex = re.compile(r'Volume \d+%.+')
+more_videos_regex = re.compile(r'More Videos\d+:.+')
 
 
 def get_logger():
@@ -162,7 +155,7 @@ def find_unscraped_articles():
           pagenum += 1
           
           # Extract and clean the html source for the current page
-          cat_page_url = SURFCAT_URL.format(catnum, pagenum * ARTICLES_PER_PAGE)
+          cat_page_url = SURFCAT_URL.format(catnum, '' if pagenum == 0 else f'page/{pagenum + 1}/')
           get_logger().debug("Scraping category page: {}".format(cat_page_url))
           get_driver().get_url(cat_page_url)
           raw_source = get_driver().driver.page_source
@@ -220,38 +213,11 @@ def extract_article_list(category, post_source):
   """
   global already_scraped
 
-  # Extract all the divs containing article cards. There are two possible html layouts
-  soup = BeautifulSoup(post_source, "html.parser")
-  article_divs = soup.find_all("div", class_="inertia-item")
-  if len(article_divs) == 0:
-    # Perhaps we're dealing with old html, the class switched in Nov 2018
-    article_divs = soup.find_all("div", class_="item")
-    if len(article_divs) == 0:
-      get_logger().warn("No articles found to extract")
-      return []
+  cards = extract_cards(category, post_source)
+  if not cards:
+      raise ValueError('No Inertia cards found; refusing to treat a failed listing as already scraped')
+  return [article for article in cards if article['url'].split('/')[-1] not in already_scraped]
 
-  # From each article div, extract the partial content (url, thumbnail, category) from the card
-  articles = []
-  get_logger().info("Extracting {} articles starting with: {}".format(len(article_divs), article_divs[0].find('a').get('href')))
-  for article_div in article_divs:
-    # print(article.prettify())
-    url = article_div.find('a').get('href')[:-1]
-    if url.split("/")[-1] in already_scraped:
-      continue
-    img = article_div.find('img').get('src')
-    if img is None:
-      img = article_div.find('img').get('data-src')
-    
-    # TODO: We want to keep the https:// so that all articles are full URLs, but need to update the database and the
-    #       API code that adds the prefix
-    if img is not None:
-      img = img.replace('https://www', 'cdn1')
-
-    article_json = {"url": url, "category": category, "thumb": img}
-    get_logger().debug("Article card found: {}".format(article_json))
-    articles += [article_json]
-
-  return articles
 
 def extract_articles(articles):
   """
@@ -297,6 +263,12 @@ def scrape_article(article):
     
     # There are different formats/html structure so figure out which we're dealing with
     soup = BeautifulSoup(source, "html.parser")
+    parsed = current_article(soup)
+    if parsed is not None:
+        article_soup, fields = parsed
+        article.update(fields)
+        return get_article_content(article_soup, article)
+
     article_soup = soup.find("div", class_="inertia-article")
     if article_soup is None:
         article_soup = soup.find("main", class_="inertia-article")
@@ -392,7 +364,9 @@ def get_article_content(soup, article):
     :param article: The json/dictionary of data already extracted from this article
     :return:
     """
-    article_element = soup.find("article", {"itemprop": "articleBody"})
+    article_element = soup.find("article", {"itemprop": "articleBody"}) or soup.select_one(".entry-content")
+    if article_element is None:
+        raise ValueError("No Inertia article body found")
 
     # Remove sections of the page that don't have article-specific data
     decompose_divs = ['page-numbers', 'social-share', 'trc_related_container', 'inertia-comments-container',
@@ -501,12 +475,15 @@ def create_article(article):
     
     try:
       r.raise_for_status()
+      already_scraped.add(article['url'].rstrip('/').split('/')[-1])
     except Exception as ex:
-      get_logger().error(f"There was a {type(ex)} error while creating article {article['url']}:...\n{r.json()}")
+      get_logger().error(f"Article submission failed ({r.status_code}): {article['url']}")
+      raise
 
 @atexit.register
 def cleanup():
-    get_driver().driver.quit()
+    if _driver is not None:
+        _driver.driver.quit()
 
 
 def test_urls(urls):
