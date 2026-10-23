@@ -53,6 +53,8 @@ REST_API_PROTOCOL = config['common']['rest_api']['protocol']
 REST_API_HOST = config['common']['rest_api']['host']
 REST_API_PORT = config['common']['rest_api']['port']
 REST_API_URL = f"{REST_API_PROTOCOL}://{REST_API_HOST}:{REST_API_PORT}"
+from dogbeach.api import ApiClient
+API = ApiClient(REST_API_URL, config)
 CREATE_ENDPOINT = f"{REST_API_URL}/article"
 PUBLISHER_ARTICLES_ENDPOINT = f"{REST_API_URL}/articleUrlsByPublisher?publisher={PUBLISHER}"
 
@@ -121,7 +123,7 @@ def load_already_scraped_articles():
     """
     global already_scraped
 
-    r = requests.get(PUBLISHER_ARTICLES_ENDPOINT)
+    r = API.get(PUBLISHER_ARTICLES_ENDPOINT)
     urls_json = r.json()
     already_scraped = set([x['url'].rstrip('/').split("/")[-1] for x in urls_json])
     get_logger().debug("Found {} articles already scraped".format(len(already_scraped)))
@@ -336,7 +338,7 @@ def create_articles(articles):
       get_logger().debug("Writing article to RDS...\n{}".format(article))
 
       header = { "Content-Type": "application/json" }
-      r = requests.post(CREATE_ENDPOINT, headers=header, data=json.dumps(article, default=str))
+      r = API.post(CREATE_ENDPOINT, headers=header, data=json.dumps(article, default=str))
       try:
         r.raise_for_status()
       except Exception as ex:

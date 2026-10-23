@@ -1,4 +1,5 @@
 common:
+    api_token: "configure-your-own-token"
     rest_api:
         protocol: "http"
         host: "localhost"

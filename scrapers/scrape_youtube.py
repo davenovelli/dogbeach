@@ -31,6 +31,8 @@ REST_API_PROTOCOL = config['common']['rest_api']['protocol']
 REST_API_HOST = config['common']['rest_api']['host']
 REST_API_PORT = config['common']['rest_api']['port']
 REST_API_URL = f"{REST_API_PROTOCOL}://{REST_API_HOST}:{REST_API_PORT}"
+from dogbeach.api import ApiClient
+API = ApiClient(REST_API_URL, config)
 CREATE_ENDPOINT = f"{REST_API_URL}/article"
 PUBLISHER_ARTICLES_ENDPOINT = f"{REST_API_URL}/articleUrlsByPublisher?publisher="
 
@@ -93,7 +95,7 @@ def get_already_scraped(channel_names):
     global ALREADY_SCRAPED
 
     for channel_name in channel_names:
-        r = requests.get(PUBLISHER_ARTICLES_ENDPOINT + urllib.parse.quote_plus(channel_name))
+        r = API.get(PUBLISHER_ARTICLES_ENDPOINT + urllib.parse.quote_plus(channel_name))
         urls_json = r.json()
         channel_urls = set([x['url'] for x in urls_json])
         get_logger().debug(f"{channel_name}: {len(channel_urls)} videos found")
@@ -295,7 +297,7 @@ def create_videos(videos):
 
         header = { "Content-Type": "application/json" }
         json_data = json.dumps(video, default=str)
-        r = requests.post(CREATE_ENDPOINT, headers=header, data=json_data)
+        r = API.post(CREATE_ENDPOINT, headers=header, data=json_data)
         
         try:
             r.raise_for_status()
