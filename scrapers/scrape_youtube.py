@@ -11,7 +11,6 @@ import urllib.parse
 from pathlib import Path
 
 import googleapiclient.discovery
-import googleapiclient.errors
 
 # The singleton containing the google api client object
 YOUTUBE = None
@@ -24,6 +23,7 @@ with open("../config.yml", "r") as ymlfile:
 # Import Doglog
 sys.path.append('..')
 from dogbeach import doglog
+from dogbeach.google_api import safe_google_call
 _logger = None
 
 # What is the API endpoint
@@ -77,7 +77,9 @@ def get_youtube():
 
     # Establish the service object
     if YOUTUBE is None:
-        YOUTUBE = googleapiclient.discovery.build("youtube", "v3", developerKey=GOOGLE_API_KEY)
+        YOUTUBE = safe_google_call(
+            lambda: googleapiclient.discovery.build("youtube", "v3", developerKey=GOOGLE_API_KEY)
+        )
     
     return YOUTUBE
 
@@ -86,7 +88,8 @@ def get_youtube():
 def close_youtube():
     """ Function to run after script completes
     """
-    get_youtube().close()
+    if YOUTUBE is not None:
+        YOUTUBE.close()
 
 
 def get_already_scraped(channel_names):
@@ -219,7 +222,7 @@ def scrape_playlist(playlist_id):
         request = get_youtube().playlistItems().list(**params)
         
         # Execute request and set parameters for next iteration
-        response = request.execute()
+        response = safe_google_call(request.execute)
         time.sleep(1)
         # get_logger().debug(response)
         # get_logger().debug(json.dumps(response, sort_keys=True, indent=4))
@@ -248,7 +251,7 @@ def scrape_playlist(playlist_id):
             part = "contentDetails",
             id = ",".join(video_ids)
         )
-        video_response = video_request.execute()
+        video_response = safe_google_call(video_request.execute)
         time.sleep(1)
         # get_logger().debug(json.dumps(video_response, sort_keys=True, indent=4))
 
