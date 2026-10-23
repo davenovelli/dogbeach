@@ -41,28 +41,13 @@ APOSTROPHE_TERMS = pd.read_csv('./apostrophe_terms_to_save.txt').term.tolist()
 # When generating tags in "update" mode, how many weeks back should we go to potentially change the tags?
 UPDATE_HISTORY_WEEKS = 8
 
-# Read in the config file
-with open("config.yml", "r") as ymlfile:
-    config = yaml.load(ymlfile, Loader=yaml.FullLoader)
-
-# What is the API endpoint
-CREATE_ENDPOINT = config['CREATE_ENDPOINT']
-API = ApiClient(CREATE_ENDPOINT, {'common': {'api_token': config.get('SCRAPER_API_TOKEN')}})
-SCRAPER_USER_ID = int(os.environ.get('SCRAPER_USER_ID') or config['SCRAPER_USER_ID'])
-
-# RDS connection strings
-HOST = config['HOST']
-USER = config['USER']
-PASSWORD = config['PASSWORD']
-DATABASE = config['DATABASE']
-
 
 def parse_args():
     """ Specify the command line arguments to accept """
     import argparse
-    parser = argparse.ArgumentParser(description='Process some integers.')
-    parser.add_argument('--mode', action='store', dest='mode', default=MODE,
-                        help='Define the autotagging mode: all, new, update (default: new)')
+    parser = argparse.ArgumentParser(description='Tag local or explicitly authorized YewReview articles.')
+    parser.add_argument('--mode', action='store', dest='mode', default=MODE, choices=['all', 'new', 'update'],
+                        help='Define the autotagging mode: all, new, update (default: update)')
     
     args = parser.parse_args()
     print(args)
@@ -116,7 +101,8 @@ def get_articles():
     
     connection = None
     try:
-        connection = pymysql.connect(host=HOST, user=USER, password=PASSWORD, database=DATABASE)
+        connection = pymysql.connect(host=HOST, user=USER, password=PASSWORD, database=DATABASE,
+                                     connect_timeout=5, read_timeout=30, write_timeout=30, **DATABASE_TLS)
         if LOAD_DATA:
             df = pd.read_csv('./latest_articles_to_model_df.csv')
         else:
@@ -356,6 +342,17 @@ def generate_tags(df):
 
 if __name__ == '__main__':
     args = parse_args()
+    # Credentials are runtime input, never a Docker build argument/layer.
+    with open('config.yml', 'r') as ymlfile:
+        config = yaml.safe_load(ymlfile)
+    CREATE_ENDPOINT = config['CREATE_ENDPOINT']
+    API = ApiClient(CREATE_ENDPOINT, {'common': {'api_token': config.get('SCRAPER_API_TOKEN')}})
+    SCRAPER_USER_ID = int(os.environ.get('SCRAPER_USER_ID') or config['SCRAPER_USER_ID'])
+    HOST, USER, PASSWORD, DATABASE = (config[key] for key in ['HOST', 'USER', 'PASSWORD', 'DATABASE'])
+    ca_file = config.get('DATABASE_CA_FILE')
+    if not ca_file and not (os.environ.get('YEWREVIEW_ENVIRONMENT') == 'local' and HOST in ('db', 'localhost', '127.0.0.1')):
+        raise ValueError('Remote database access requires DATABASE_CA_FILE')
+    DATABASE_TLS = {'ssl_ca': ca_file, 'ssl_verify_cert': True, 'ssl_verify_identity': True} if ca_file else {}
     if args.mode:
         MODE = args.mode
     print(f"running in {MODE} mode...\n")
