@@ -1,0 +1,8 @@
+.git
+config.yml
+config.local.yml
+.env*
+log
+data
+__pycache__
+*.pickle
