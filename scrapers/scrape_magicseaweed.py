@@ -6,7 +6,7 @@ import pprint
 import logging
 import requests
 
-from retry import retry
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 from pathlib import Path
 from bs4 import BeautifulSoup
 from time import sleep, strftime
@@ -21,6 +21,7 @@ with open("../config.yml", "r") as ymlfile:
 # Import Doglog
 sys.path.append('..')
 from dogbeach import doglog
+from dogbeach.dogdriver import launch_playwright
 from dogbeach.dogdriver import DogDriver
 
 _logger = None
@@ -124,7 +125,8 @@ def create_article(article):
       get_logger().error(f"There was a {type(ex)} error while creating article {article['url']}:...\n{r.json()}")
 
 
-@retry(Error, tries=6, delay=3, backoff=1.4, max_delay=30)
+@retry(retry=retry_if_exception_type(Error), stop=stop_after_attempt(6),
+       wait=wait_exponential(multiplier=3, exp_base=1.4, max=30), reraise=True)
 def extract_article(page, url):
     get_logger().info(url)
     
@@ -191,7 +193,7 @@ def scrape():
     with sync_playwright() as p:
         get_logger().info(f"Start time: {strftime('%H:%M:%S')}\n")
         
-        browser = p.chromium.launch(headless=True)
+        browser = launch_playwright(p)
         context = browser.new_context(user_agent=AGENT)
         page = context.new_page()
         page.route('**/*', lambda route, request: abort_or_continue(route, request))

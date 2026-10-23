@@ -330,9 +330,9 @@ def scrape_article(article):
         # print("{} {} {}".format(author_name, author_url, author_type))
     else:
         get_logger().debug("No author found for this article")
-        article['author_name'] = np.NaN
-        article['author_url'] = np.NaN
-        article['author_type'] = np.NaN
+        article['author_name'] = np.nan
+        article['author_url'] = np.nan
+        article['author_type'] = np.nan
 
     # Article Content
     article = get_article_content(article_soup, article)
