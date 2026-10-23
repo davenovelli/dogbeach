@@ -1,0 +1,11 @@
+[extend]
+useDefault = true
+
+# Lakey Peterson's public YouTube channel ID is data, not an API credential.
+# Match only this exact identifier in this exact CSV; keep all secret rules active.
+[[allowlists]]
+description = "Public YouTube channel identifier"
+condition = "AND"
+regexTarget = "secret"
+paths = ['(^|/)scrapers/youtube_channel_list\.txt$']
+regexes = ['^UCetqivVVEGv6diBDDM0ItQg$']
