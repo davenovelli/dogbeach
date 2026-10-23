@@ -1,12 +1,31 @@
 import os
 import time
 from dogbeach import doglog
-from sys import platform
 from pathlib import Path
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.common.exceptions import TimeoutException
 from selenium.common.exceptions import WebDriverException
+
+
+# Use the same current, pinned Chrome release for Selenium and Playwright.
+CHROME_BINARY = os.environ.get('YEWREVIEW_CHROME_BINARY', '/opt/yewreview-browsers/156.0.8078.47/chrome-linux64/chrome')
+CHROMEDRIVER_BINARY = os.environ.get('YEWREVIEW_CHROMEDRIVER', '/opt/yewreview-browsers/156.0.8078.47/chromedriver-linux64/chromedriver')
+os.environ.setdefault('PLAYWRIGHT_NODEJS_PATH', '/opt/node-v24.22.1-linux-x64/bin/node')
+
+
+def browser_test_args():
+    if os.environ.get('YEWREVIEW_UPGRADE_TEST') == '1':
+        return ['--host-resolver-rules=MAP yewreview.com 127.0.0.1, MAP www.yewreview.com 127.0.0.1']
+    return []
+
+
+def launch_playwright(playwright):
+    return playwright.chromium.launch(
+        executable_path=CHROME_BINARY, channel='chrome',
+        headless=True, chromium_sandbox=True, args=browser_test_args(),
+    )
 
 
 class DogDriver:
@@ -38,21 +57,14 @@ class DogDriver:
         # instantiate a chrome options object so you can set the size and headless preference
         options = Options()
         options.add_experimental_option("excludeSwitches", ['enable-automation'])
-        options.add_argument("--headless")
+        options.add_argument("--headless=new")
         options.add_argument("--window-size=1920x1080")
         options.add_argument('--disable-extensions')
-        options.add_argument('--disable-gpu')
-        options.add_argument('--no-sandbox')
         options.add_argument('--no-proxy-server')
-
-        # download the chrome driver from https://sites.google.com/a/chromium.org/chromedriver/downloads and put it in
-        # the current directory
-        currdir = os.path.dirname(os.path.realpath(__file__)) + "/{}"
-        if "linux" in platform:
-            options.binary_location = '/home/ubuntu/.cache/ms-playwright/chromium-1033/chrome-linux/chrome'
-            return webdriver.Chrome(chrome_options=options, executable_path=currdir.format("chromedriver_linux"))
-        else:
-            return webdriver.Chrome(chrome_options=options, executable_path=currdir.format("chromedriver"))
+        for argument in browser_test_args():
+            options.add_argument(argument)
+        options.binary_location = CHROME_BINARY
+        return webdriver.Chrome(service=Service(CHROMEDRIVER_BINARY), options=options)
 
     def get_url(self, url, sleep=None, tries=None):
         """ Recursive method to retrieve the

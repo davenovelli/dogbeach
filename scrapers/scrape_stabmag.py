@@ -358,10 +358,10 @@ def scrape_pages():
     # Click the "load more" button so we have all of the first 20 results (only for first page)
     from selenium.common.exceptions import NoSuchElementException
     try:
-        more_button = get_driver('site').driver.find_element_by_class_name('pagination-load-more')
+        more_button = get_driver('site').driver.find_element(By.CLASS_NAME, 'pagination-load-more')
     except NoSuchElementException as nseex:
         try:
-            more_button = get_driver('site').driver.find_element_by_id('load-more')
+            more_button = get_driver('site').driver.find_element(By.ID, 'load-more')
         except NoSuchElementException as nseex2:
             get_logger().error("Can't find the 'Load More' button, quitting.")
             exit()
@@ -373,7 +373,7 @@ def scrape_pages():
     # Scrape the first MAX_SCRAPED_PAGES_BEFORE_QUIT pages, even if there isn't a single new article on a page
     articles = []
     for _ in range(MAX_SCRAPED_PAGES_BEFORE_QUIT):
-        posts = get_driver('site').driver.find_element_by_id('blog-list')
+        posts = get_driver('site').driver.find_element(By.ID, 'blog-list')
 
         post_articles = extract_articles(posts)
         if len(post_articles) == 0:

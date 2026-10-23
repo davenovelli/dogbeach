@@ -8,13 +8,13 @@ import logging
 import requests
 import pandas as pd
 
-from retry import retry
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 from pathlib import Path
 from requests import Timeout
 from bs4 import BeautifulSoup
 from time import sleep, strftime
 from dateutil.parser import parse
-from scrapy.selector import Selector
+from parsel import Selector
 from playwright.sync_api import sync_playwright
 
 
@@ -26,6 +26,7 @@ with open("../config.yml", "r") as ymlfile:
 # Import Doglog
 sys.path.append('..')
 from dogbeach import doglog
+from dogbeach.dogdriver import launch_playwright
 _logger = None
 
 
@@ -131,7 +132,8 @@ def create_article(article):
 
 ################################################################################
 
-@retry(Timeout, tries=6, delay=3, backoff=1.4, max_delay=30)
+@retry(retry=retry_if_exception_type(Timeout), stop=stop_after_attempt(6),
+       wait=wait_exponential(multiplier=3, exp_base=1.4, max=30), reraise=True)
 def extract_article(page, post):
     """
     :param page: the playwright page object used to load the url
@@ -231,7 +233,7 @@ def scrape():
 
     empty_pages = 0
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = launch_playwright(p)
         context = browser.new_context(user_agent=AGENT)
         page = context.new_page()
         page.route('**/*', lambda route, request: abort_or_continue(route, request))

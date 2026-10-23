@@ -1,3 +1,4 @@
+from selenium.webdriver.common.by import By
 import os
 import re
 import sys
@@ -12,7 +13,7 @@ import pprint as pp
 from time import sleep
 from pathlib import Path
 from datetime import datetime
-from scrapy.selector import Selector
+from parsel import Selector
 from selenium.webdriver.common.keys import Keys
 
 # Config
@@ -315,14 +316,14 @@ def extract_new_links():
 
         # If other screen appear, close
         try:
-            get_driver().driver.find_element_by_xpath("*//i[@class='tipi-i-close'])[2]").click()
+            get_driver().driver.find_element(By.XPATH, "*//i[@class='tipi-i-close'])[2]").click()
         except:
             pass
 
         # Click the "more" button until there are no more links in the category
         while True:
             try:
-                button_load_more = get_driver().driver.find_element_by_xpath("*//a[@class='block-loader tipi-button inf-load-more custom-button__fill-1 custom-button__size-1 custom-button__rounded-1']")
+                button_load_more = get_driver().driver.find_element(By.XPATH, "*//a[@class='block-loader tipi-button inf-load-more custom-button__fill-1 custom-button__size-1 custom-button__rounded-1']")
                 sleep(0.4)
                 
                 button_load_more.click()
@@ -330,7 +331,7 @@ def extract_new_links():
 
                 #if other screen appear,close
                 try:
-                    get_driver().driver.find_element_by_xpath("*//i[@class='tipi-i-close'])[2]").click()
+                    get_driver().driver.find_element(By.XPATH, "*//i[@class='tipi-i-close'])[2]").click()
                 except:
                     pass
             except:
